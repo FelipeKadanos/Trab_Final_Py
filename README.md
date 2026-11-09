@@ -22,10 +22,10 @@ Substituir os nomes antes de começar. Cada pessoa implementa sua parte e deve e
 
 | Pessoa | Nome | Responsabilidade | Cards |
 | --- | --- | --- | --- |
-| 1 | A preencher | Fonte, CSV, validação e limpeza | C01, C02 |
-| 2 | A preencher | Estatísticas, gráficos e interpretações | C03 |
-| 3 | A preencher | Modelos, avaliação e previsão | C04, C05 |
-| 4 | A preencher | Flask, HTML, integração e instalação | C06, C07 |
+| 1 | Leonardo Teles | Fonte, CSV, validação e limpeza | C01, C02 |
+| 2 | Murilo | Estatísticas, gráficos e interpretações | C03 |
+| 3 | Felipe | Modelos, avaliação e previsão | C04, C05 |
+| 4 | Marcos | Flask, HTML, integração e instalação | C06, C07 |
 | Todos | Os quatro | Revisão, demonstração e defesa | C08 |
 
 **Ordem:** C01 → C02 → C03 e C04 em paralelo → C05 → conclusão de C06 → C07 → C08. A pessoa 4 pode preparar páginas e rotas desde a publicação dos contratos. A pessoa 2 pode preparar gráficos após C01, conferindo depois com a limpeza real.
@@ -38,14 +38,103 @@ Cada pessoa usa sua branch, por exemplo `pessoa1-dados`, com commits pequenos e 
 
 | Registro | Situação |
 | --- | --- |
-| Aprovação do tema e dataset pelo professor | Pendente de registro |
-| Link oficial direto para obtenção | A preencher |
-| Período selecionado | A preencher |
-| Data de acesso e condições de uso | A preencher |
-| Filtros e passos de download/exportação | A preencher |
-| Mapeamento exato das colunas BTS para nosso CSV | A preencher |
+| Aprovação do tema e dataset pelo professor | Confirmada pelo integrante responsável pela Pessoa 1 |
+| Link oficial direto para obtenção | [BTS — janeiro de 2024](https://www.transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2024_1.zip) |
+| Período selecionado | Janeiro de 2024 |
+| Data de acesso e condições de uso | Download realizado em 09/11/2026. Referência de uso: política geral do DOT, que informa ausência de restrições de copyright e cobrança para suas publicações e solicita citação da fonte. [Política oficial](https://transportation.libanswers.com/faq/156950). |
+| Filtros e passos de download/exportação | Descritos nas seções de preparação e reprodução abaixo |
+| Mapeamento exato das colunas BTS para nosso CSV | Descrito na tabela abaixo |
 
-Confirmar acesso, dicionário e condições de uso antes de fixar o recorte. Se o volume for grande, usar até 20.000 registros em amostra aleatória com `random_state=42`, após os filtros de elegibilidade. Registrar contagens e procedimento; não selecionar apenas atrasados ou pontuais. Preservar o original sem alterações, localmente se for grande, e documentar como obtê-lo. Não versionar arquivos grandes por acidente.
+#### Mapeamento das colunas
+
+| Coluna original da BTS | Coluna no projeto |
+| --- | --- |
+| Reporting_Airline | companhia |
+| Month | mes |
+| DayOfWeek | dia_semana |
+| CRSDepTime | hora_prevista |
+| Distance | distancia |
+| ArrDelay | atraso_chegada |
+| Cancelled | cancelado |
+| Diverted | desviado |
+
+O horário previsto usa o formato HHMM local, a distância é medida
+em milhas e o atraso de chegada em minutos. Atrasos negativos
+representam chegadas antecipadas.
+
+O mapeamento e as unidades foram conferidos no dicionário de dados
+`readme.html`, incluído no ZIP original da BTS. Esse documento descreve
+a tabela `Reporting Carrier On-Time Performance (1987-present)`.
+
+Fonte dos dados: U.S. Department of Transportation, Bureau of
+Transportation Statistics (BTS), Reporting Carrier On-Time Performance
+(1987-present), janeiro de 2024. Acesso em 09/11/2026.
+
+#### Preparação e tamanho da base
+
+| Etapa | Registros removidos | Registros restantes |
+| --- | ---: | ---: |
+| Leitura do arquivo original | — | 547.271 |
+| Remoção de duplicatas nas oito colunas | 10.858 | 536.413 |
+| Exclusão de voos cancelados | 17.709 | 518.704 |
+| Exclusão de voos desviados | 1.471 | 517.233 |
+| Exclusão de outros registros inválidos ou sem atraso informado | 0 | 517.233 |
+
+Após essas etapas, não foram encontrados atrasos de chegada
+ausentes, indicadores inválidos, horários inválidos, meses ou
+dias da semana inválidos, distâncias não positivas ou companhias vazias.
+
+Os códigos das companhias foram padronizados em maiúsculas,
+sem espaços nas extremidades.
+
+Foi selecionada uma amostra aleatória de 20.000 registros,
+sem reposição, com `random_state=42`:
+- 15.106 voos com atraso inferior a 15 minutos.
+- 4.894 voos com atraso de 15 minutos ou mais.
+
+A amostra foi salva em `data/voos.csv`, com oito colunas,
+codificação UTF-8, separador vírgula e sem índice adicional.
+O ZIP original foi preservado em `data/brutos/`.
+
+Limitação: registros iguais nas oito colunas podem representar
+voos diferentes. A remoção dessas duplicatas segue o contrato
+do projeto, mas pode excluir voos legítimos indistinguíveis
+nesse recorte.
+
+#### Como reproduzir a base
+
+Execute os comandos abaixo no terminal, dentro da pasta do projeto.
+
+1. Crie o ambiente virtual e instale a versão utilizada do Pandas:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install pandas==3.1.1
+```
+
+2. Crie a pasta para o arquivo original e faça o download:
+
+```powershell
+New-Item -ItemType Directory -Force data/brutos
+
+curl.exe -f -L -o "data/brutos/bts_2024_01.zip" "https://www.transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2024_1.zip"
+```
+
+3. Execute a preparação:
+
+```powershell
+.\.venv\Scripts\python.exe preparar_base.py
+```
+
+O script gera `data/voos.csv` com 20.000 registros e oito colunas.
+Uma nova execução substitui esse CSV, mas preserva o ZIP original.
+
+Verificação realizada por Leonardo Teles: duas execuções consecutivas
+geraram arquivos `data/voos.csv` com o mesmo SHA-256, confirmando
+a reprodução da amostra no ambiente utilizado.
+
+CSV conferido: 20.000 registros, oito colunas e ambas as classes
+de atraso presentes.
 
 ### Formato aceito no upload e no treino
 
