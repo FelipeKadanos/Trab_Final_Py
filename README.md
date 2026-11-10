@@ -235,7 +235,7 @@ def prever_voo(campos, modelo):
 
 ### C01 — Fixar fonte, período e base comum
 
-**Pessoa 1 · Dependência: aprovação do professor · Status: [ ] Concluído**
+**Pessoa 1 · Dependência: aprovação do professor · Status: [X] Concluído**
 
 **Fazer:**
 
@@ -249,7 +249,7 @@ def prever_voo(campos, modelo):
 
 ### C02 — Leitura, validação e limpeza
 
-**Pessoa 1 · Depende de C01 · Arquivo: `dados.py` · Status: [ ] Concluído**
+**Pessoa 1 · Depende de C01 · Arquivo: `dados.py` · Status: [X] Concluído**
 
 **Fazer:**
 
@@ -260,6 +260,32 @@ def prever_voo(campos, modelo):
 - Criar `atrasou` e retornar o relatório contratado. Se nenhuma linha válida restar, gerar erro amigável. Uma só classe pode ser analisada; treino deve recusá-la.
 
 **Aceite:** conferir CSV válido, vazio, cabeçalho errado, separador ponto e vírgula, número inválido, horário `1260`, horário `2400`, cancelado, desviado, atraso ausente e duplicata. Contagens antes/depois devem fechar, e o original permanece intacto.
+
+#### Verificações realizadas — C02
+
+Responsável: Leonardo Teles.
+
+| Cenário | Resultado |
+| --- | --- |
+| CSV válido | 20.000 registros e nove colunas, incluindo `atrasou` |
+| Arquivo vazio ou somente com cabeçalho | Rejeitado com mensagem compreensível |
+| Coluna obrigatória ausente | Nome da coluna informado no erro |
+| Separador ponto e vírgula | Rejeitado |
+| Codificação inválida e aspas sem fechamento | Rejeitadas com mensagens compreensíveis |
+| Coluna extra | Ignorada e registrada no relatório |
+| Duplicata | Removida e contabilizada |
+| Companhia com espaços e letras minúsculas | Normalizada |
+| Número inválido ou infinito | Convertido em ausente para validação |
+| Indicador inválido, cancelado e desviado | Removidos na ordem prevista |
+| Horário 1260 e distância negativa | Linha removida sem dupla contagem |
+| Horário 2400 | Convertido para 0 |
+| Atraso de chegada ausente | Linha removida |
+| Nenhuma linha válida restante | Erro compreensível |
+| Atrasos de -5, 14 e 15 minutos | Classes 0, 0 e 1 |
+| Base com uma classe | Mantida para análise, com aviso |
+| Contagens de remoção | 7 entradas = 6 removidas + 1 válida |
+| Preservação do CSV original | SHA-256 igual antes e depois da limpeza |
+| Integração com preparar_base.py | Mesmas contagens e distribuição de classes do C01 |
 
 ### C03 — Estatísticas, três gráficos e três achados
 
