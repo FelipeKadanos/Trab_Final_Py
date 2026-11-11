@@ -138,18 +138,28 @@ def analisar_dados(df_limpo):
     companhia_maior_taxa = por_companhia.iloc[0]
     companhia_menor_taxa = por_companhia.iloc[-1]
 
-    interpretacao = (
-        f"A maior taxa de atraso foi da companhia "
-        f"{companhia_maior_taxa['companhia']}, com "
-        f"{companhia_maior_taxa['taxa_atraso']:.1f}% em "
-        f"{int(companhia_maior_taxa['quantidade_voos'])} voos. "
-        f"A menor taxa foi da companhia "
-        f"{companhia_menor_taxa['companhia']}, com "
-        f"{companhia_menor_taxa['taxa_atraso']:.1f}% em "
-        f"{int(companhia_menor_taxa['quantidade_voos'])} voos. "
-        f"As quantidades devem ser consideradas ao comparar as porcentagens."
-    )
+    if len(por_companhia) > 1:
+        interpretacao = (
+            f"A maior taxa de atraso foi da companhia "
+            f"{companhia_maior_taxa['companhia']}, com "
+            f"{companhia_maior_taxa['taxa_atraso']:.1f}% em "
+            f"{int(companhia_maior_taxa['quantidade_voos'])} voos. "
+            f"A menor taxa foi da companhia "
+            f"{companhia_menor_taxa['companhia']}, com "
+            f"{companhia_menor_taxa['taxa_atraso']:.1f}% em "
+            f"{int(companhia_menor_taxa['quantidade_voos'])} voos. "
+            f"As quantidades devem ser consideradas ao comparar as porcentagens."
+        )
+    else:
+        companhia_unica = por_companhia.iloc[0]
 
+        interpretacao = (
+            f"A base analisada possui apenas a companhia "
+            f"{companhia_unica['companhia']}, com taxa de atraso de "
+            f"{companhia_unica['taxa_atraso']:.1f}% em "
+            f"{int(companhia_unica['quantidade_voos'])} voos. "
+            f"Não é possível comparar companhias diferentes nesta base."
+        )
     graficos.append({
         "titulo": "Porcentagem de atrasos por companhia",
         "imagem_base64": _figura_para_base64(figura),
