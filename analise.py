@@ -155,3 +155,68 @@ def analisar_dados(df_limpo):
         "imagem_base64": _figura_para_base64(figura),
         "interpretacao": interpretacao,
     })
+
+    # Gráfico 3: compara a distância dos voos entre as classes de atraso.
+    classes_presentes = sorted(df_limpo["atrasou"].unique())
+
+    dados_boxplot = []
+    rotulos_boxplot = []
+
+    for classe in classes_presentes:
+        distancias_classe = df_limpo.loc[
+            df_limpo["atrasou"] == classe,
+            "distancia",
+        ]
+
+        dados_boxplot.append(distancias_classe)
+
+        if classe == 0:
+            rotulos_boxplot.append("Sem atraso de 15 min")
+        else:
+            rotulos_boxplot.append("Com atraso de 15 min")
+
+    figura, eixo = plt.subplots(figsize=(8, 5))
+
+    eixo.boxplot(
+        dados_boxplot,
+        tick_labels=rotulos_boxplot,
+    )
+
+    eixo.set_title("Distância dos voos por classe de atraso")
+    eixo.set_xlabel("Classe de atraso")
+    eixo.set_ylabel("Distância (milhas)")
+
+    if len(classes_presentes) == 2:
+        mediana_sem_atraso = float(
+            df_limpo.loc[
+                df_limpo["atrasou"] == 0,
+                "distancia",
+            ].median()
+        )
+
+        mediana_com_atraso = float(
+            df_limpo.loc[
+                df_limpo["atrasou"] == 1,
+                "distancia",
+            ].median()
+        )
+
+        interpretacao = (
+            f"A mediana da distância foi de {mediana_sem_atraso:.1f} milhas "
+            f"nos voos sem atraso de 15 minutos e de "
+            f"{mediana_com_atraso:.1f} milhas nos voos com atraso. "
+            f"O boxplot permite observar a distribuição e a sobreposição "
+            f"entre os grupos, sem indicar relação de causa e efeito."
+        )
+    else:
+        interpretacao = (
+            "A base analisada possui apenas uma classe de atraso. "
+            "O gráfico mostra a distribuição das distâncias dessa classe, "
+            "mas não permite comparar os dois grupos."
+        )
+
+    graficos.append({
+        "titulo": "Distância dos voos por classe de atraso",
+        "imagem_base64": _figura_para_base64(figura),
+        "interpretacao": interpretacao,
+    })
