@@ -107,3 +107,51 @@ def analisar_dados(df_limpo):
         "imagem_base64": _figura_para_base64(figura),
         "interpretacao": interpretacao,
     })
+
+    # Gráfico 2: compara a porcentagem de atrasos por companhia.
+    figura, eixo = plt.subplots(figsize=(10, 6))
+
+    barras = eixo.bar(
+        por_companhia["companhia"],
+        por_companhia["taxa_atraso"],
+        edgecolor="black",
+    )
+
+    eixo.set_title("Porcentagem de atrasos por companhia")
+    eixo.set_xlabel("Companhia")
+    eixo.set_ylabel("Voos com atraso de pelo menos 15 min (%)")
+
+    # Mostra o tamanho de cada grupo acima da barra.
+    for barra, quantidade in zip(
+        barras,
+        por_companhia["quantidade_voos"],
+    ):
+        eixo.text(
+            barra.get_x() + barra.get_width() / 2,
+            barra.get_height(),
+            f"n={int(quantidade)}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+
+    companhia_maior_taxa = por_companhia.iloc[0]
+    companhia_menor_taxa = por_companhia.iloc[-1]
+
+    interpretacao = (
+        f"A maior taxa de atraso foi da companhia "
+        f"{companhia_maior_taxa['companhia']}, com "
+        f"{companhia_maior_taxa['taxa_atraso']:.1f}% em "
+        f"{int(companhia_maior_taxa['quantidade_voos'])} voos. "
+        f"A menor taxa foi da companhia "
+        f"{companhia_menor_taxa['companhia']}, com "
+        f"{companhia_menor_taxa['taxa_atraso']:.1f}% em "
+        f"{int(companhia_menor_taxa['quantidade_voos'])} voos. "
+        f"As quantidades devem ser consideradas ao comparar as porcentagens."
+    )
+
+    graficos.append({
+        "titulo": "Porcentagem de atrasos por companhia",
+        "imagem_base64": _figura_para_base64(figura),
+        "interpretacao": interpretacao,
+    })
