@@ -52,3 +52,25 @@ def analisar_dados(df_limpo):
         "minimo": float(df_limpo["atraso_chegada"].min()),
         "maximo": float(df_limpo["atraso_chegada"].max()),
     }
+
+    # Agrupa os voos por companhia para comparar quantidade e taxa de atraso.
+    por_companhia = (
+        df_limpo.groupby("companhia", as_index=False)
+        .agg(
+            quantidade_voos=("atrasou", "size"),
+            quantidade_atrasados=("atrasou", "sum")
+        )
+    )
+
+    # Calcula a porcentagem de atrasos de cada companhia.
+    por_companhia["taxa_atraso"] = (
+        por_companhia["quantidade_atrasados"]
+        / por_companhia["quantidade_voos"]
+        * 100
+    )
+
+    # Ordena da maior para a menor taxa de atraso.
+    por_companhia = por_companhia.sort_values(
+        "taxa_atraso",
+        ascending=False,
+    ).reset_index(drop=True)
