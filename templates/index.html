@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Atrasos de voos — Início</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav><a href="{{ url_for('inicio') }}">Início</a></nav>
+<h1>Atrasos de voos: análise e previsão</h1>
+<p>Pergunta do projeto: usando informações disponíveis antes da partida, é possível prever se um voo
+chegará com atraso de pelo menos 15 minutos?</p>
+
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+{% if aviso_artefatos %}<p class="aviso">{{ aviso_artefatos }}</p>{% endif %}
+
+<section class="caixa">
+    <h2>Modelo em uso</h2>
+    {% if avaliacao %}
+    <ul>
+        <li>Fonte: {{ avaliacao.fonte }}</li>
+        <li>Período: {{ avaliacao.periodo }}</li>
+        <li>Registros usados no treino: {{ avaliacao.quantidade_registros }}</li>
+        <li>Versão da base (SHA-256 do CSV de treino): <code>{{ avaliacao.versao_base }}</code></li>
+        <li>Modelo escolhido: {{ avaliacao.modelo_escolhido }}</li>
+    </ul>
+    {% else %}
+    <p>Informações de treino indisponíveis.</p>
+    {% endif %}
+    <p><strong>Importante:</strong> o upload de CSV atualiza apenas as análises e os gráficos.
+    O modelo <strong>não é retreinado</strong> com o arquivo enviado.</p>
+</section>
+
+<section>
+    <h2>1. Enviar CSV para análise</h2>
+    <p>Formato: CSV UTF-8, separador vírgula, decimal com ponto, com cabeçalho. Tamanho máximo: 10 MB.
+    Colunas extras são ignoradas.</p>
+    <div class="rolagem">
+    <table>
+        <tr><th>Coluna</th><th>Descrição</th></tr>
+        <tr><td>companhia</td><td>Código da companhia aérea (texto, ex.: AA)</td></tr>
+        <tr><td>mes</td><td>Mês, inteiro de 1 a 12</td></tr>
+        <tr><td>dia_semana</td><td>1 (segunda) a 7 (domingo)</td></tr>
+        <tr><td>hora_prevista</td><td>Horário previsto de partida, HHMM local (0000–2359)</td></tr>
+        <tr><td>distancia</td><td>Distância em milhas (positiva)</td></tr>
+        <tr><td>atraso_chegada</td><td>Atraso de chegada em minutos (negativo = chegada antecipada)</td></tr>
+        <tr><td>cancelado</td><td>0 ou 1</td></tr>
+        <tr><td>desviado</td><td>0 ou 1</td></tr>
+    </table>
+    </div>
+    <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data">
+        <label>Arquivo CSV:
+            <input type="file" name="arquivo" accept=".csv" required>
+        </label>
+        <button type="submit">Analisar</button>
+    </form>
+</section>
+
+<section>
+    <h2>2. Prever um voo</h2>
+    <p>Informe os dados conhecidos antes da partida. Ninguém informa o atraso futuro.</p>
+    {% if not modelo_disponivel %}
+    <p class="aviso">Previsão indisponível até o modelo ser treinado.</p>
+    {% endif %}
+    {% if erro_previsao %}<p class="erro">{{ erro_previsao }}</p>{% endif %}
+    <form action="{{ url_for('prever') }}" method="post">
+        <label>Companhia aérea:
+            {% if companhias %}
+            <select name="companhia" required>
+                {% for c in companhias %}
+                <option value="{{ c }}" {% if valores.companhia == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
+            <input type="text" name="companhia" value="{{ valores.companhia or '' }}" placeholder="ex.: AA" required>
+            {% endif %}
+        </label>
+        <label>Mês (1 a 12):
+            <input type="number" name="mes" min="1" max="12" value="{{ valores.mes or '' }}" required>
+        </label>
+        <label>Dia da semana:
+            <select name="dia_semana" required>
+                {% for numero, nome in [(1,'Segunda'),(2,'Terça'),(3,'Quarta'),(4,'Quinta'),(5,'Sexta'),(6,'Sábado'),(7,'Domingo')] %}
+                <option value="{{ numero }}" {% if valores.dia_semana == numero|string %}selected{% endif %}>{{ numero }} — {{ nome }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Horário previsto de partida (HHMM, ex.: 1415 = 14h15):
+            <input type="number" name="hora_prevista" min="0" max="2359" value="{{ valores.hora_prevista or '' }}" required>
+        </label>
+        <label>Distância (milhas):
+            <input type="number" name="distancia" min="1" step="any" value="{{ valores.distancia or '' }}" required>
+        </label>
+        <button type="submit" {% if not modelo_disponivel %}disabled{% endif %}>Prever</button>
+    </form>
+    {% if aviso_companhia %}<p class="aviso">{{ aviso_companhia }}</p>{% endif %}
+    {% if resultado %}
+    <p class="resultado">Estimativa: <strong>{{ resultado }}</strong>.<br>
+    <small>Estimativa didática baseada em um único mês de dados; não é garantia de resultado.</small></p>
+    {% endif %}
+</section>
+</body>
+</html>
