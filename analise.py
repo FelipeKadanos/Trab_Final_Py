@@ -74,3 +74,36 @@ def analisar_dados(df_limpo):
         "taxa_atraso",
         ascending=False,
     ).reset_index(drop=True)
+
+    graficos = []
+
+    # Usa quartis para resumir a concentração dos atrasos.
+    q1_atraso = float(df_limpo["atraso_chegada"].quantile(0.25))
+    q3_atraso = float(df_limpo["atraso_chegada"].quantile(0.75))
+
+    # Gráfico 1: distribuição do atraso de chegada.
+    figura, eixo = plt.subplots(figsize=(8, 5))
+
+    eixo.hist(
+        df_limpo["atraso_chegada"],
+        bins=30,
+        edgecolor="black",
+    )
+
+    eixo.set_title("Distribuição do atraso de chegada")
+    eixo.set_xlabel("Atraso de chegada (minutos)")
+    eixo.set_ylabel("Quantidade de voos")
+
+    interpretacao = (
+        f"A mediana do atraso foi de {resumo_atraso['mediana']:.1f} minutos. "
+        f"Metade central dos voos ficou entre {q1_atraso:.1f} e "
+        f"{q3_atraso:.1f} minutos de atraso de chegada. "
+        f"Os valores observados variaram de {resumo_atraso['minimo']:.1f} "
+        f"a {resumo_atraso['maximo']:.1f} minutos."
+    )
+
+    graficos.append({
+        "titulo": "Distribuição do atraso de chegada",
+        "imagem_base64": _figura_para_base64(figura),
+        "interpretacao": interpretacao,
+    })
