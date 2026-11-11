@@ -220,3 +220,63 @@ def analisar_dados(df_limpo):
         "imagem_base64": _figura_para_base64(figura),
         "interpretacao": interpretacao,
     })
+
+    # Organiza as estatísticas por companhia em uma estrutura simples.
+    estatisticas_companhias = []
+
+    for linha in por_companhia.itertuples(index=False):
+        estatisticas_companhias.append({
+            "companhia": linha.companhia,
+            "quantidade_voos": int(linha.quantidade_voos),
+            "quantidade_atrasados": int(linha.quantidade_atrasados),
+            "taxa_atraso": float(linha.taxa_atraso),
+        })
+
+    # Reúne todas as estatísticas calculadas pela análise.
+    estatisticas = {
+        "quantidade_voos": quantidade_voos,
+        "quantidade_atrasados": quantidade_atrasados,
+        "taxa_atraso": taxa_atraso,
+        "distancia": resumo_distancia,
+        "atraso_chegada": resumo_atraso,
+        "por_companhia": estatisticas_companhias,
+    }
+
+    # Achados quantitativos gerados a partir do CSV atual.
+    achados = [
+        (
+            f"Dos {quantidade_voos} voos analisados, "
+            f"{quantidade_atrasados} tiveram atraso de pelo menos 15 minutos, "
+            f"representando {taxa_atraso:.1f}% do total."
+        ),
+        (
+            f"A maior taxa de atraso por companhia foi observada em "
+            f"{companhia_maior_taxa['companhia']}: "
+            f"{companhia_maior_taxa['taxa_atraso']:.1f}% em "
+            f"{int(companhia_maior_taxa['quantidade_voos'])} voos."
+        ),
+    ]
+
+    if len(classes_presentes) == 2:
+        achados.append(
+            (
+                f"A mediana da distância foi de {mediana_sem_atraso:.1f} milhas "
+                f"nos voos sem atraso de 15 minutos e de "
+                f"{mediana_com_atraso:.1f} milhas nos voos com atraso."
+            )
+        )
+    else:
+        achados.append(
+            (
+                f"A mediana da distância dos voos analisados foi de "
+                f"{resumo_distancia['mediana']:.1f} milhas, com valores entre "
+                f"{resumo_distancia['minimo']:.1f} e "
+                f"{resumo_distancia['maximo']:.1f} milhas."
+            )
+        )
+
+    return {
+        "estatisticas": estatisticas,
+        "graficos": graficos,
+        "achados": achados,
+    }
