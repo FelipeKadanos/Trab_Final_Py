@@ -129,9 +129,9 @@ def limpar_dados(dados):
 # Converte a imagem para texto Base64, exibido no HTML sem salvar arquivos PNG.
 def _grafico_base64():
     arquivo = io.BytesIO()
-    plt.tight_layout()
-    plt.savefig(arquivo, format="png", dpi=110)
-    plt.close()
+    plt.tight_layout() # Evita sobreposicao dos titulos, eixos e legendas.
+    plt.savefig(arquivo, format="png", dpi=110) # Salva o grafico como PNG em memoria.
+    plt.close() # Fecha a figura para nao misturar os proximos graficos.
     arquivo.seek(0)
     return base64.b64encode(arquivo.getvalue()).decode("utf-8")
 
@@ -140,12 +140,12 @@ def _grafico_base64():
 def criar_graficos(dados):
     graficos = []
 
-    plt.figure(figsize=(8, 4))
+    plt.figure(figsize=(8, 4)) # Cria uma figura com 8 polegadas de largura e 4 de altura.
     # clip limita somente a exibicao dos extremos; os dados originais permanecem iguais.
     plt.hist(dados["ArrDelay"].clip(-60, 180), bins=30, color="steelblue", edgecolor="black")
-    plt.title("Distribuicao do atraso na chegada")
-    plt.xlabel("Atraso em minutos (valores entre -60 e 180)")
-    plt.ylabel("Quantidade de voos")
+    plt.title("Distribuicao do atraso na chegada") # Titulo
+    plt.xlabel("Atraso em minutos (valores entre -60 e 180)") # Legenda do eixo X
+    plt.ylabel("Quantidade de voos") # Legenda do eixo Y
     mediana = dados["ArrDelay"].median()
     graficos.append({
         "imagem": _grafico_base64(),
@@ -160,10 +160,10 @@ def criar_graficos(dados):
     por_companhia = por_companhia.sort_values("mean", ascending=False)
     plt.figure(figsize=(8, 4))
     (por_companhia["mean"] * 100).plot(kind="bar", color="darkorange")
-    plt.title("Percentual de atrasos por companhia")
-    plt.xlabel("Companhia")
-    plt.ylabel("Voos atrasados (%)")
-    plt.xticks(rotation=45, ha="right")
+    plt.title("Percentual de atrasos por companhia") # Titulo
+    plt.xlabel("Companhia") # Legenda do eixo X
+    plt.ylabel("Voos atrasados (%)") # Legenda do eixo Y
+    plt.xticks(rotation=45, ha="right") # Inclina os nomes para facilitar a leitura.
     companhia_maior = por_companhia.index[0]
     percentual_maior = por_companhia.iloc[0]["mean"] * 100
     graficos.append({
@@ -176,10 +176,10 @@ def criar_graficos(dados):
     por_horario = dados.groupby(faixas, observed=False)["Atrasado"].mean() * 100
     plt.figure(figsize=(8, 4))
     por_horario.plot(kind="bar", color="seagreen")
-    plt.title("Percentual de atrasos por horario previsto")
-    plt.xlabel("Periodo do dia")
-    plt.ylabel("Voos atrasados (%)")
-    plt.xticks(rotation=0)
+    plt.title("Percentual de atrasos por horario previsto") # Titulo
+    plt.xlabel("Periodo do dia") # Legenda do eixo X
+    plt.ylabel("Voos atrasados (%)") # Legenda do eixo Y
+    plt.xticks(rotation=0) # Mantem os nomes dos periodos na horizontal.
     faixa_maior = por_horario.idxmax()
     graficos.append({
         "imagem": _grafico_base64(),
