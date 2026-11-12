@@ -3,8 +3,8 @@ import csv
 import io
 import os
 import tempfile
-import unicodedata
 
+# Guarda o cache dos graficos em uma pasta temporaria com permissao de escrita.
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "matplotlib-cache"))
 import matplotlib
 matplotlib.use("Agg") # Permite criar os graficos sem abrir uma janela.
@@ -12,29 +12,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+# Estes nomes sao o contrato do CSV; a ordem das colunas no arquivo pode variar.
 COLUNAS_OBRIGATORIAS = [
     "Year", "Month", "DayofWeek", "Reporting_Airline", "CRSDepTime",
     "Distance", "Cancelled", "Diverted", "ArrDelay",
 ]
-
-NOMES_COLUNAS = {
-    "year": "Year", "ano": "Year",
-    "month": "Month", "mes": "Month",
-    "dayofweek": "DayofWeek", "diadasemana": "DayofWeek",
-    "reportingairline": "Reporting_Airline", "companhia": "Reporting_Airline", "companhiaaerea": "Reporting_Airline",
-    "crsdeptime": "CRSDepTime", "horarioprevisto": "CRSDepTime", "horariopartida": "CRSDepTime",
-    "distance": "Distance", "distancia": "Distance",
-    "cancelled": "Cancelled", "cancelado": "Cancelled",
-    "diverted": "Diverted", "desviado": "Diverted",
-    "arrdelay": "ArrDelay", "atraso": "ArrDelay", "atrasochegada": "ArrDelay",
-}
-
-
-def _normalizar_nome_coluna(nome):
-    texto = unicodedata.normalize("NFKD", str(nome)).encode("ascii", "ignore").decode("ascii")
-    texto = "".join(caractere for caractere in texto.lower() if caractere.isalnum())
-    return NOMES_COLUNAS.get(texto, str(nome).strip())
-
 
 # Le o arquivo enviado e verifica o formato antes de iniciar a analise.
 def ler_csv(arquivo):
@@ -44,35 +26,24 @@ def ler_csv(arquivo):
     if not arquivo.filename.lower().endswith(".csv"):
         raise ValueError("O arquivo precisa ter a extensao .csv.")
 
+    # read() recebe os bytes do upload; decode transforma esses bytes em texto.
     conteudo = arquivo.read()
     if not conteudo:
         raise ValueError("O arquivo CSV esta vazio.")
 
     try:
-        texto = conteudo.decode("utf-8-sig")
+        texto = conteudo.decode("utf-8-sig") # Tambem remove o BOM, se existir.
     except UnicodeDecodeError:
-        # Alguns arquivos salvos pelo Excel no Windows utilizam esta codificacao.
-        texto = conteudo.decode("latin-1")
+        raise ValueError("Salve o arquivo CSV com codificacao UTF-8.")
 
     try:
-        linhas = texto.splitlines()
-        if linhas and linhas[0].strip().lower() in ["sep=,", "sep=;", "sep=\\t"]:
-            texto = "\n".join(linhas[1:])
+        # O cabecalho define o separador; os nomes oficiais nao sao traduzidos.
+        separador = csv.Sniffer().sniff(texto.splitlines()[0], delimiters=",;").delimiter
+        dados = pd.read_csv(io.StringIO(texto), sep=separador)
+    except (csv.Error, IndexError, pd.errors.ParserError, pd.errors.EmptyDataError):
+        raise ValueError("Nao foi possivel ler o CSV. Use virgula ou ponto e virgula como separador.")
 
-        # Testamos os separadores aceitos e usamos aquele que encontrou mais colunas.
-        tentativas = []
-        for separador in [",", ";", "\t"]:
-            try:
-                tentativas.append(pd.read_csv(io.StringIO(texto), sep=separador))
-            except (pd.errors.ParserError, pd.errors.EmptyDataError):
-                pass
-        if not tentativas:
-            raise ValueError
-        dados = max(tentativas, key=lambda tentativa: len(tentativa.columns))
-        dados = dados.rename(columns={coluna: _normalizar_nome_coluna(coluna) for coluna in dados.columns})
-    except ValueError:
-        raise ValueError("Nao foi possivel ler o CSV. Use virgula, ponto e virgula ou tabulacao como separador.")
-
+    # Comparamos os nomes encontrados com a lista obrigatoria antes de limpar.
     colunas_ausentes = [coluna for coluna in COLUNAS_OBRIGATORIAS if coluna not in dados.columns]
     if colunas_ausentes:
         encontradas = ", ".join(str(coluna) for coluna in dados.columns)
@@ -106,6 +77,7 @@ def horario_para_minutos(horario):
 def limpar_dados(dados):
     dados_limpos = dados.copy()
     quantidade_inicial = len(dados_limpos)
+    # dtypes mostra os tipos; isnull().sum() conta ausencias em cada coluna.
     tipos = {coluna: str(tipo) for coluna, tipo in dados_limpos.dtypes.items()}
     ausentes = {coluna: int(valor) for coluna, valor in dados_limpos.isnull().sum().items() if valor > 0}
     duplicatas = int(dados_limpos.duplicated().sum())
@@ -113,6 +85,7 @@ def limpar_dados(dados):
     # A duplicata so e removida quando todas as colunas do registro sao iguais.
     dados_limpos = dados_limpos.drop_duplicates()
 
+    # errors="coerce" transforma textos incompatíveis em ausentes, removidos abaixo.
     colunas_numericas = ["Year", "Month", "DayofWeek", "CRSDepTime", "Distance", "Cancelled", "Diverted", "ArrDelay"]
     for coluna in colunas_numericas:
         dados_limpos[coluna] = pd.to_numeric(dados_limpos[coluna], errors="coerce")
@@ -120,16 +93,22 @@ def limpar_dados(dados):
     dados_limpos["Reporting_Airline"] = dados_limpos["Reporting_Airline"].astype("string").str.strip()
 
     # Voos cancelados ou desviados nao possuem uma chegada normal para avaliar.
-    dados_limpos = dados_limpos[(dados_limpos["Cancelled"] == 0) & (dados_limpos["Diverted"] == 0)]
     dados_limpos = dados_limpos.dropna(subset=COLUNAS_OBRIGATORIAS)
-    dados_limpos = dados_limpos[dados_limpos["Reporting_Airline"] != ""]
-    dados_limpos = dados_limpos[dados_limpos["Year"] >= 1987]
-    dados_limpos = dados_limpos[dados_limpos["Month"].between(1, 12)]
-    dados_limpos = dados_limpos[dados_limpos["DayofWeek"].between(1, 7)]
-    dados_limpos = dados_limpos[dados_limpos["Distance"] > 0]
+    # & exige que todas as condicoes sejam verdadeiras para manter o registro.
+    validos = (
+        (dados_limpos["Cancelled"] == 0)
+        & (dados_limpos["Diverted"] == 0)
+        & (dados_limpos["Reporting_Airline"] != "")
+        & (dados_limpos["Year"] >= 1987)
+        & dados_limpos["Month"].between(1, 12)
+        & dados_limpos["DayofWeek"].between(1, 7)
+        & (dados_limpos["Distance"] > 0)
+    )
+    dados_limpos = dados_limpos[validos].copy()
 
     dados_limpos["HorarioMinutos"] = dados_limpos["CRSDepTime"].apply(horario_para_minutos)
     dados_limpos = dados_limpos.dropna(subset=["HorarioMinutos"])
+    # astype(int) converte True/False em 1/0 para a classificacao.
     dados_limpos["Atrasado"] = (dados_limpos["ArrDelay"] >= 15).astype(int)
 
     if dados_limpos.empty:
@@ -147,6 +126,7 @@ def limpar_dados(dados):
     return dados_limpos, diagnostico
 
 
+# Converte a imagem para texto Base64, exibido no HTML sem salvar arquivos PNG.
 def _grafico_base64():
     arquivo = io.BytesIO()
     plt.tight_layout()
@@ -161,6 +141,7 @@ def criar_graficos(dados):
     graficos = []
 
     plt.figure(figsize=(8, 4))
+    # clip limita somente a exibicao dos extremos; os dados originais permanecem iguais.
     plt.hist(dados["ArrDelay"].clip(-60, 180), bins=30, color="steelblue", edgecolor="black")
     plt.title("Distribuicao do atraso na chegada")
     plt.xlabel("Atraso em minutos (valores entre -60 e 180)")
@@ -171,6 +152,7 @@ def criar_graficos(dados):
         "interpretacao": f"A mediana do atraso foi {mediana:.1f} minutos. Valores negativos representam chegadas antecipadas.",
     })
 
+    # Como Atrasado e 0 ou 1, a media representa a proporcao de atrasos.
     por_companhia = dados.groupby("Reporting_Airline")["Atrasado"].agg(["mean", "count"])
     companhias_com_amostra = por_companhia[por_companhia["count"] >= 5]
     if not companhias_com_amostra.empty:
@@ -189,6 +171,7 @@ def criar_graficos(dados):
         "interpretacao": f"Entre as companhias com pelo menos 5 voos, {companhia_maior} teve o maior percentual de atrasos: {percentual_maior:.1f}%.",
     })
 
+    # cut separa o dia em quatro periodos de seis horas. O limite direito fica fora da faixa.
     faixas = pd.cut(dados["HorarioMinutos"], bins=[0, 360, 720, 1080, 1440], right=False, labels=["Madrugada", "Manha", "Tarde", "Noite"])
     por_horario = dados.groupby(faixas, observed=False)["Atrasado"].mean() * 100
     plt.figure(figsize=(8, 4))
@@ -206,6 +189,7 @@ def criar_graficos(dados):
     return graficos
 
 
+# Calcula os indicadores exibidos acima da amostra e dos graficos.
 def resumir_dados(dados):
     return {
         "voos": len(dados),

@@ -58,7 +58,7 @@ A aplicacao aceita separador por virgula ou ponto e virgula e exige estas coluna
 | `Diverted` | 1 para voo desviado e 0 para nao desviado |
 | `ArrDelay` | Diferenca entre chegada real e prevista, em minutos |
 
-O arquivo precisa estar em UTF-8 e pode ter outras colunas. O limite de upload e 16 MB.
+O arquivo precisa estar em UTF-8 e usar exatamente os nomes oficiais acima, em qualquer ordem. Pode ter outras colunas. Cabecalhos traduzidos, tabulacao e linhas `sep=` do Excel nao sao aceitos. O limite de upload e 16 MB.
 
 ## Limpeza e analise
 

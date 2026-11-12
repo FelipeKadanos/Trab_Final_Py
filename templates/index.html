@@ -12,12 +12,14 @@
         <p>Previsao de chegada com atraso de 15 minutos ou mais</p>
     </header>
 
+    <!-- Jinja recebe os dados do Flask e monta as partes condicionais da pagina. -->
     <main>
         {% if erro %}<div class="mensagem erro">{{ erro }}</div>{% endif %}
 
         <section>
             <h2>Analisar um arquivo CSV</h2>
-            <p>Envie um CSV separado por virgula, ponto e virgula ou tabulacao, com as colunas descritas no README.</p>
+            <p>Envie um CSV UTF-8 separado por virgula ou ponto e virgula, com os nomes oficiais das colunas descritos no README.</p>
+            <!-- multipart/form-data permite enviar o conteudo do arquivo ao Flask. -->
             <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data">
                 <input type="file" name="arquivo" accept=".csv" required>
                 <button type="submit">Analisar arquivo</button>
@@ -27,6 +29,7 @@
         <section>
             <h2>Prever atraso</h2>
             <p>O modelo foi treinado com a amostra fixa do BTS de janeiro a marco de 2024.</p>
+            <!-- As opcoes mostram nomes, mas enviam os valores numericos usados no modelo. -->
             <form action="{{ url_for('prever') }}" method="post" class="formulario-previsao">
                 <label>Companhia
                     <select name="companhia" required>
@@ -68,6 +71,7 @@
                 <label>Distancia em milhas<input type="number" name="distancia" min="1" step="0.1" required></label>
                 <button type="submit">Realizar previsao</button>
             </form>
+            <!-- A classe de cor e o texto ja foram calculados no servidor. -->
             {% if resultado_previsao %}
             <div class="mensagem {{ resultado_previsao.classe }}">
                 <strong>Atraso estimado: {{ resultado_previsao.mensagem }}.</strong>
@@ -81,6 +85,7 @@
             <h2>Comparacao dos modelos</h2>
             <p>Treino: {{ modelo.tamanho_treino }} voos | Teste: {{ modelo.tamanho_teste }} voos | Classe majoritaria no teste: {{ '%.1f'|format(modelo.classe_majoritaria * 100) }}%</p>
             <div class="modelos">
+                <!-- Repete o mesmo cartao para cada classificador avaliado. -->
                 {% for item in modelo.resultados %}
                 <article>
                     <h3>{{ item.nome }}</h3>
@@ -97,6 +102,7 @@
             <p>O tempo de atraso e estimado por um modelo auxiliar, com erro medio de {{ '%.1f'|format(modelo.mae_minutos) }} minutos no conjunto de teste.</p>
         </section>
 
+        <!-- Os resultados da analise aparecem somente depois de um upload valido. -->
         {% if analise %}
         <section>
             <h2>Resultado da analise</h2>
@@ -114,10 +120,12 @@
                 <ul>{% for coluna, tipo in analise.diagnostico.tipos.items() %}<li>{{ coluna }}: {{ tipo }}</li>{% endfor %}</ul>
             </details>
             <h3>Amostra dos dados tratados</h3>
+            {# safe renderiza a tabela criada pelo Pandas, que escapa os valores das celulas. #}
             <div class="tabela-container">{{ analise.amostra|safe }}</div>
             <h3>Graficos e interpretacoes</h3>
             {% for grafico in analise.graficos %}
             <article class="grafico">
+                <!-- A imagem Base64 vem na resposta, sem precisar de um arquivo PNG separado. -->
                 <img src="data:image/png;base64,{{ grafico.imagem }}" alt="Grafico da analise">
                 <p>{{ grafico.interpretacao }}</p>
             </article>
@@ -126,10 +134,13 @@
         {% endif %}
     </main>
     <script>
+        // getElementById encontra o campo que recebera a mascara de horario.
         const campoHorario = document.getElementById("horario");
 
         // Mantem apenas quatro numeros e adiciona o h enquanto o usuario digita.
         campoHorario.addEventListener("input", function () {
+            // \D representa qualquer caractere que nao seja um numero.
+            // slice(0, 4) limita a entrada aos dois digitos da hora e dois do minuto.
             const numeros = campoHorario.value.replace(/\D/g, "").slice(0, 4);
 
             if (numeros.length > 2) {
