@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; color: #1f2937; background: #f1f5f9; }
+header { padding: 28px 20px; color: white; text-align: center; background: #1d4ed8; }
+header h1 { margin: 0 0 8px; }
+header p { margin: 0; }
+main { width: min(1100px, 94%); margin: 24px auto; }
+section { margin-bottom: 22px; padding: 22px; background: white; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
+h2 { margin-top: 0; color: #1d4ed8; }
+form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.formulario-previsao label { display: flex; min-width: 180px; flex: 1; flex-direction: column; gap: 6px; }
+input, select, button { padding: 10px; border: 1px solid #cbd5e1; border-radius: 5px; }
+button { border: 0; color: white; cursor: pointer; background: #1d4ed8; }
+button:hover { background: #1e40af; }
+.mensagem { margin: 16px 0; padding: 14px; border-radius: 5px; }
+.erro { color: #991b1b; background: #fee2e2; }
+.sucesso { color: #166534; background: #dcfce7; }
+.modelos { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.modelos article { padding: 16px; border: 1px solid #dbeafe; border-radius: 6px; }
+.modelos table, .tabela { border-collapse: collapse; }
+td, th { padding: 8px; border: 1px solid #cbd5e1; text-align: center; }
+.resumo { display: flex; gap: 10px; flex-wrap: wrap; }
+.resumo span { padding: 10px; color: #1e3a8a; background: #dbeafe; border-radius: 5px; }
+.tabela-container { overflow-x: auto; }
+.grafico { margin-top: 22px; text-align: center; }
+.grafico img { width: min(800px, 100%); }
+@media (max-width: 600px) { section { padding: 15px; } .formulario-previsao label { min-width: 100%; } }

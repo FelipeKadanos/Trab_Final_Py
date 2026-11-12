@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analise de atrasos em voos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Analise de atrasos em voos</h1>
+        <p>Previsao de chegada com atraso de 15 minutos ou mais</p>
+    </header>
+
+    <main>
+        {% if erro %}<div class="mensagem erro">{{ erro }}</div>{% endif %}
+
+        <section>
+            <h2>Analisar um arquivo CSV</h2>
+            <p>Envie um CSV separado por virgula ou ponto e virgula, com as colunas descritas no README.</p>
+            <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data">
+                <input type="file" name="arquivo" accept=".csv" required>
+                <button type="submit">Analisar arquivo</button>
+            </form>
+        </section>
+
+        <section>
+            <h2>Prever atraso</h2>
+            <p>O modelo foi treinado com a amostra fixa do BTS de janeiro a marco de 2024.</p>
+            <form action="{{ url_for('prever') }}" method="post" class="formulario-previsao">
+                <label>Companhia
+                    <select name="companhia" required>
+                        {% for companhia in modelo.companhias %}<option value="{{ companhia }}">{{ companhia }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label>Mês
+                    <select name="mes" required>
+                        <option value="" selected disabled>Selecione o mês</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </label>
+                <label>Dia da semana
+                    <select name="dia_semana" required>
+                        <option value="" selected disabled>Selecione o dia</option>
+                        <option value="1">Segunda-feira</option>
+                        <option value="2">Terça-feira</option>
+                        <option value="3">Quarta-feira</option>
+                        <option value="4">Quinta-feira</option>
+                        <option value="5">Sexta-feira</option>
+                        <option value="6">Sábado</option>
+                        <option value="7">Domingo</option>
+                    </select>
+                </label>
+                <label>Horário previsto
+                    <input type="text" name="horario" id="horario" inputmode="numeric" maxlength="5" placeholder="13h30" pattern="([01][0-9]|2[0-3])h[0-5][0-9]" title="Informe um horário válido no formato 13h30" required>
+                </label>
+                <label>Distancia em milhas<input type="number" name="distancia" min="1" step="0.1" required></label>
+                <button type="submit">Realizar previsao</button>
+            </form>
+            {% if resultado_previsao %}<div class="mensagem sucesso">{{ resultado_previsao }}</div>{% endif %}
+        </section>
+
+        <section>
+            <h2>Comparacao dos modelos</h2>
+            <p>Treino: {{ modelo.tamanho_treino }} voos | Teste: {{ modelo.tamanho_teste }} voos | Classe majoritaria no teste: {{ '%.1f'|format(modelo.classe_majoritaria * 100) }}%</p>
+            <div class="modelos">
+                {% for item in modelo.resultados %}
+                <article>
+                    <h3>{{ item.nome }}</h3>
+                    <p>Acuracia: {{ '%.3f'|format(item.acuracia) }}</p>
+                    <p>Precisao: {{ '%.3f'|format(item.precisao) }}</p>
+                    <p>Recall: {{ '%.3f'|format(item.recall) }}</p>
+                    <p>F1: {{ '%.3f'|format(item.f1) }}</p>
+                    <p>Matriz de confusao (real nas linhas e previsto nas colunas):</p>
+                    <table><tr><td>{{ item.matriz[0][0] }}</td><td>{{ item.matriz[0][1] }}</td></tr><tr><td>{{ item.matriz[1][0] }}</td><td>{{ item.matriz[1][1] }}</td></tr></table>
+                </article>
+                {% endfor %}
+            </div>
+            <p><strong>Modelo escolhido: {{ modelo.nome_escolhido }}</strong>, por apresentar o maior F1 para voos atrasados.</p>
+        </section>
+
+        {% if analise %}
+        <section>
+            <h2>Resultado da analise</h2>
+            <div class="resumo">
+                <span>{{ analise.resumo.voos }} voos validos</span>
+                <span>{{ analise.resumo.companhias }} companhias</span>
+                <span>{{ '%.1f'|format(analise.resumo.percentual_atrasados) }}% atrasados</span>
+                <span>{{ '%.1f'|format(analise.resumo.distancia_media) }} milhas em media</span>
+            </div>
+            <h3>Limpeza</h3>
+            <p>Registros antes: {{ analise.diagnostico.quantidade_inicial }} | depois: {{ analise.diagnostico.quantidade_final }} | removidos: {{ analise.diagnostico.removidos }} | duplicatas completas encontradas: {{ analise.diagnostico.duplicatas }}</p>
+            <p>Valores ausentes antes da limpeza: {{ analise.diagnostico.ausentes if analise.diagnostico.ausentes else 'nenhum' }}</p>
+            <details>
+                <summary>Tipos encontrados no arquivo original</summary>
+                <ul>{% for coluna, tipo in analise.diagnostico.tipos.items() %}<li>{{ coluna }}: {{ tipo }}</li>{% endfor %}</ul>
+            </details>
+            <h3>Amostra dos dados tratados</h3>
+            <div class="tabela-container">{{ analise.amostra|safe }}</div>
+            <h3>Graficos e interpretacoes</h3>
+            {% for grafico in analise.graficos %}
+            <article class="grafico">
+                <img src="data:image/png;base64,{{ grafico.imagem }}" alt="Grafico da analise">
+                <p>{{ grafico.interpretacao }}</p>
+            </article>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </main>
+    <script>
+        const campoHorario = document.getElementById("horario");
+
+        // Mantem apenas quatro numeros e adiciona o h enquanto o usuario digita.
+        campoHorario.addEventListener("input", function () {
+            const numeros = campoHorario.value.replace(/\D/g, "").slice(0, 4);
+
+            if (numeros.length > 2) {
+                campoHorario.value = numeros.slice(0, 2) + "h" + numeros.slice(2);
+            } else {
+                campoHorario.value = numeros;
+            }
+        });
+    </script>
+</body>
+</html>
