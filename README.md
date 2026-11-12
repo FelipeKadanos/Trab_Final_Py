@@ -28,6 +28,117 @@ Para executar os testes:
 python -m unittest discover -s tests -v
 ```
 
+## Fluxo completo do trabalho
+
+Este roteiro acompanha os dados desde a criacao do CSV ate os resultados no navegador e os testes do programa. Execute os comandos na pasta do projeto.
+
+### 1. Preparar o ambiente
+
+Crie e ative o ambiente virtual e instale as dependencias:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+### 2. Gerar o CSV de exemplo
+
+```powershell
+python gerar_amostra.py
+```
+
+O script `gerar_amostra.py` executa estas etapas:
+
+1. Obtem os ZIPs do BTS de janeiro, fevereiro e marco de 2024. Reutiliza os arquivos presentes em `.dados_bts/` ou baixa pela internet.
+2. Le as nove colunas usadas no projeto e renomeia `DayOfWeek` para `DayofWeek`, conforme o formato da aplicacao.
+3. Sorteia ate 4.000 registros por mes com sementes fixas de 43, 44 e 45. Junta as amostras e sorteia 10.000 voos com `random_state=42`.
+4. Salva `data/voos_bts_2024_amostra.csv`, sem uma coluna extra de indice.
+
+Esta etapa e opcional, pois o CSV ja acompanha o repositorio. Executa-la substitui a amostra existente. Os ZIPs baixados nao sao salvos automaticamente em `.dados_bts/`.
+
+### 3. Iniciar a aplicacao e limpar a base
+
+```powershell
+python app.py
+```
+
+Na inicializacao, `app.py` le a amostra fixa e chama `limpar_dados()`, de `dados.py`. A funcao trabalha em uma copia e registra tipos, ausencias, duplicatas e quantidades antes e depois da limpeza.
+
+Ela remove duplicatas, converte colunas numericas, exclui voos cancelados, desviados, incompletos ou com valores invalidos e transforma o horario HHMM em minutos desde a meia-noite.
+
+Depois, cria `Atrasado`: **1** para `ArrDelay >= 15` e **0** para chegadas antecipadas ou com atraso inferior a 15 minutos. Na amostra incluida, restam 9.813 voos.
+
+### 4. Treinar, testar e escolher o modelo
+
+A funcao `treinar_modelos()`, de `modelo.py`, recebe os dados limpos:
+
+1. Define `X` com companhia, mes, dia da semana, horario previsto em minutos e distancia. O alvo `y` e `Atrasado`.
+2. Divide os registros em 80% para treino e 20% para teste, com `random_state=42` e estratificacao para preservar aproximadamente a proporcao das classes. Na amostra limpa, sao 7.850 registros de treino e 1.963 de teste.
+3. Codifica as companhias com `OneHotEncoder` e, para a Regressao Logistica, padroniza os numeros com `StandardScaler`. O preparo e aprendido somente no treino, dentro de `Pipeline`.
+4. Treina Arvore de Decisao e Regressao Logistica na mesma divisao. Executa `predict()` no teste e calcula acuracia, precisao, recall, F1 e matriz de confusao.
+5. Escolhe o maior F1 da classe atrasada e guarda o modelo, seu preparo e os resultados em memoria. Tambem treina uma Floresta Aleatoria auxiliar para estimar `ArrDelay`, usando as mesmas entradas e divisao de treino/teste. Seu erro absoluto medio (MAE) e mostrado em minutos, considerando chegadas antecipadas como zero atraso.
+
+A pagina apresenta as metricas, matrizes, tamanhos de treino e teste, proporcao da classe majoritaria e modelo escolhido. Na amostra incluida, a Arvore de Decisao vence. Essa avaliacao do aprendizado e diferente dos testes automatizados do codigo, descritos na etapa 8.
+
+### 5. Enviar um CSV para analise
+
+Abra `http://127.0.0.1:5000`, selecione o CSV de exemplo e clique em **Analisar arquivo**. Outros arquivos tambem sao aceitos, desde que respeitem o formato documentado abaixo.
+
+A rota `/analisar` chama `ler_csv()` para verificar extensao, conteudo, UTF-8, separador e colunas obrigatorias. Depois, aplica `limpar_dados()` ao arquivo enviado. Entradas invalidas geram mensagens na pagina.
+
+O upload atualiza as analises e os graficos. O modelo permanece treinado com a amostra fixa da inicializacao. Para usar uma amostra regenerada no treinamento, reinicie a aplicacao.
+
+### 6. Consultar estatisticas, graficos e resultados
+
+A rota usa `resumir_dados()` e `criar_graficos()` para enviar ao template `templates/index.html`:
+
+- Total de voos validos, companhias, percentual de atrasos e distancia media.
+- Diagnostico com quantidades antes e depois da limpeza, removidos, duplicatas, ausencias e tipos.
+- Amostra dos primeiros dez registros tratados.
+- **Histograma dos atrasos:** mostra a distribuicao e informa a mediana. A exibicao limita os extremos entre -60 e 180 minutos, sem alterar os dados dos calculos.
+- **Barras por companhia:** compara os percentuais de atrasos e identifica o maior.
+- **Barras por periodo do dia:** compara os percentuais entre madrugada, manha, tarde e noite e identifica o maior.
+
+Os graficos sao gerados com Matplotlib e enviados ao HTML como PNG em Base64, sem salvar imagens no disco. As interpretacoes sao calculadas a partir do CSV enviado.
+
+### 7. Fazer uma nova previsao
+
+Em **Prever atraso**, preencha companhia, mes, dia da semana, horario previsto (`13h30`) e distancia em milhas. Clique em **Realizar previsao**.
+
+A rota `/prever` valida os campos e converte o horario para minutos. `prever_atraso()` monta uma linha com as mesmas colunas e ordem do treinamento. Os `Pipeline`s aplicam o preparo e executam `predict()` para obter a classe e a estimativa de minutos.
+
+A pagina apresenta o atraso estimado em horas e minutos (por exemplo, **1 hora e 30 minutos**) e o total em minutos. A mensagem fica verde ate 15 minutos, amarela acima de 15, laranja acima de 30 e vermelha acima de 60. Valores negativos aparecem como **Sem atraso estimado**. A classificacao de atraso de 15 minutos ou mais aparece em uma linha separada. Os dois modelos sao independentes e podem divergir; a duracao e uma estimativa, e o atraso real so e conhecido apos a chegada.
+
+### 8. Executar os testes e conferir a entrega
+
+Em outro terminal, com o ambiente virtual ativado, execute:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Os testes em `tests/test_aplicacao.py` verificam leitura e rejeicao de CSVs, limpeza, conversao e validacao de horarios, formatacao de horas e minutos, cores por faixa, paginas de erro e integracao do formulario com os modelos. A importacao de `app.py` tambem executa o treinamento inicial. O resultado final deve apresentar `OK`.
+
+No navegador, confira o upload do CSV, os tres graficos e interpretacoes, as metricas e matrizes, uma nova previsao e a mensagem ao enviar um arquivo invalido. Essa conferencia complementa os testes automatizados, que nao verificam a aparencia dos graficos.
+
+```text
+BTS / ZIPs -> gerar_amostra.py -> CSV de exemplo
+                                  |
+                                  v
+                    app.py -> limpeza -> X e y
+                                  |
+                                  v
+                    treino/teste -> dois modelos
+                                  |
+                                  v
+                    metricas -> escolha pelo F1 -> formulario -> previsao
+
+CSV enviado -> validacao -> limpeza -> estatisticas + tres graficos -> HTML
+
+unittest -> verifica o codigo e a integracao das rotas
+```
+
 ## Fonte e recorte dos dados
 
 A amostra incluida em `data/voos_bts_2024_amostra.csv` possui 10.000 registros sorteados de janeiro, fevereiro e marco de 2024. A fonte e a base [Reporting Carrier On-Time Performance do BTS](https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=b0-gvzr&gnoyr_VQ=FGJ), disponibilizada em arquivos mensais no [diretorio de downloads do BTS](https://www.transtats.bts.gov/PREZIP/).
@@ -79,7 +190,7 @@ O alvo `y` e `Atrasado`. As entradas `X` sao companhia, mes, dia da semana, hora
 
 Foram comparados uma Arvore de Decisao e uma Regressao Logistica. Ambos usam a mesma divisao estratificada de 80% para treino e 20% para teste, com `random_state=42`. A companhia e codificada com `OneHotEncoder`; a Regressao Logistica tambem recebe as variaveis numericas padronizadas. Todo o preparo e ajustado apenas no treino por meio de `Pipeline`.
 
-O formulario usa o classificador escolhido na comparacao para prever chegada com atraso de 15 minutos ou mais (classe 1) ou sem esse atraso (classe 0). O resultado aparece em vermelho ou verde, respectivamente.
+O formulario usa o classificador escolhido para prever chegada com atraso de 15 minutos ou mais (classe 1) ou sem esse atraso (classe 0). Tambem usa uma Floresta Aleatoria auxiliar para estimar a duracao do atraso e exibi-la em horas e minutos, com cores por faixa. A regressao aprende os minutos historicos de `ArrDelay`, que continuam excluidos das entradas `X`. O MAE exibido avalia a estimativa com minimo de zero, correspondente ao atraso apresentado ao usuario.
 
 Na amostra incluida, depois da limpeza restaram 9.813 voos:
 

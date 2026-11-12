@@ -29,6 +29,7 @@ def ler_csv(arquivo):
 
     # read() recebe os bytes do upload; decode transforma esses bytes em texto.
     conteudo = arquivo.read()
+    
     if not conteudo:
         raise ValueError("O arquivo CSV esta vazio.")
 
@@ -58,27 +59,6 @@ def ler_csv(arquivo):
         )
 
     return dados
-
-
-# Converte um horario HHMM para minutos desde a meia-noite.
-def horario_para_minutos(horario):
-    try:
-        # O formulario envia no formato 13h30 e o CSV utiliza 1330.
-        if isinstance(horario, str):
-            horario = horario.strip().lower().replace("h", "").replace(":", "")
-
-        horario = int(float(horario))
-
-    except (TypeError, ValueError):
-        return None
-
-    horas = horario // 100
-    minutos = horario % 100
-
-    if horas < 0 or horas > 23 or minutos < 0 or minutos > 59:
-        return None
-
-    return horas * 60 + minutos
 
 
 # Limpa uma copia dos dados. O arquivo original enviado nunca e alterado.
@@ -121,8 +101,13 @@ def limpar_dados(dados):
     
     dados_limpos = dados_limpos[validos].copy()
 
-    dados_limpos["HorarioMinutos"] = dados_limpos["CRSDepTime"].apply(horario_para_minutos)
-    dados_limpos = dados_limpos.dropna(subset=["HorarioMinutos"])
+    # O CSV usa HHMM: separa horas e minutos e exclui horarios impossiveis.
+    horarios = dados_limpos["CRSDepTime"].astype(int)
+    horas = horarios // 100
+    minutos = horarios % 100
+    horarios_validos = horas.between(0, 23) & minutos.between(0, 59)
+    dados_limpos["HorarioMinutos"] = horas * 60 + minutos
+    dados_limpos = dados_limpos[horarios_validos].copy()
 
     # astype(int) converte True/False em 1/0 para a classificacao.
     dados_limpos["Atrasado"] = (dados_limpos["ArrDelay"] >= 15).astype(int)

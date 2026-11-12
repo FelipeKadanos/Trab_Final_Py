@@ -6,7 +6,7 @@ from werkzeug.datastructures import FileStorage
 
 from app import MODELO, app, preparar_resultado_atraso
 from modelo import prever_atraso
-from dados import horario_para_minutos, ler_csv, limpar_dados
+from dados import ler_csv, limpar_dados
 
 
 # Inclui voos validos, um horario impossivel e um cancelamento para testar a limpeza.
@@ -60,24 +60,54 @@ class TesteDados(unittest.TestCase):
         self.assertEqual(len(limpos), 2)
         self.assertEqual(diagnostico["quantidade_inicial"], 4)
 
-    def test_converte_horario(self):
-        self.assertEqual(horario_para_minutos(1430), 870)
-        self.assertEqual(horario_para_minutos("13h30"), 810)
-        self.assertEqual(horario_para_minutos("13:30"), 810)
-        self.assertIsNone(horario_para_minutos(2460))
+    def test_converte_horario_na_limpeza(self):
+        dados = pd.read_csv(io.StringIO(CSV_VALIDO))
+        limpos, _ = limpar_dados(dados)
+        self.assertEqual(limpos["HorarioMinutos"].tolist(), [870, 570])
 
-    def test_resultado_classificacao(self):
-        self.assertEqual(preparar_resultado_atraso(0), {
-            "mensagem": "Sem atraso de 15 minutos ou mais", "classe": "resultado-verde",
-        })
-        self.assertEqual(preparar_resultado_atraso(1), {
-            "mensagem": "Com atraso de 15 minutos ou mais", "classe": "resultado-vermelho",
-        })
+    def test_formatos_e_limites_de_horario_no_formulario(self):
+        campos = {
+            "companhia": MODELO["companhias"][0], "mes": "1",
+            "dia_semana": "1", "distancia": "500",
+        }
+        with app.test_client() as cliente:
+            for horario in ("13h30", "13:30", "1330", "00h00", "23h59"):
+                with self.subTest(horario=horario):
+                    resposta = cliente.post("/prever", data={**campos, "horario": horario})
+                    self.assertIn("Atraso estimado:", resposta.get_data(as_text=True))
+            for horario in ("24h60", "25h00", "13h60", "-100", "abc", ""):
+                with self.subTest(horario=horario):
+                    resposta = cliente.post("/prever", data={**campos, "horario": horario})
+                    self.assertIn("Informe um horario valido", resposta.get_data(as_text=True))
+
+    def test_pagina_inicial_e_erros_renderizam(self):
+        with app.test_client() as cliente:
+            self.assertEqual(cliente.get("/").status_code, 200)
+            resposta = cliente.post("/analisar")
+            self.assertIn("Selecione um arquivo CSV.", resposta.get_data(as_text=True))
+            with app.test_request_context():
+                from app import arquivo_muito_grande
+                pagina, status = arquivo_muito_grande(None)
+                self.assertEqual(status, 413)
+                self.assertIn("O arquivo ultrapassa o limite de 16 MB.", pagina)
+
+    def test_formata_horas_minutos_e_cores(self):
+        for valor, mensagem in ((90, "1 hora e 30 minutos"), (60, "1 hora"),
+                                (121, "2 horas e 1 minuto"), (1, "1 minuto"),
+                                (0, "Sem atraso estimado"), (-10, "Sem atraso estimado")):
+            with self.subTest(valor=valor):
+                self.assertEqual(preparar_resultado_atraso(valor)["mensagem"], mensagem)
+        for valor, cor in ((15, "verde"), (16, "amarelo"), (30, "amarelo"),
+                           (31, "laranja"), (60, "laranja"), (61, "vermelho")):
+            self.assertEqual(preparar_resultado_atraso(valor)["classe"], "resultado-" + cor)
+        self.assertEqual(preparar_resultado_atraso(90)["total_minutos"], "90 minutos")
 
     def test_formulario_usa_classificador_escolhido(self):
         companhia = MODELO["companhias"][0]
         previsao = prever_atraso(MODELO["modelo"], companhia, 1, 1, 810, 500)
-        mensagem = preparar_resultado_atraso(previsao)["mensagem"]
+        mensagem = "Com atraso de 15 minutos ou mais" if previsao == 1 else "Sem atraso de 15 minutos ou mais"
+        minutos = prever_atraso(MODELO["modelo_minutos"], companhia, 1, 1, 810, 500)
+        estimativa = preparar_resultado_atraso(minutos)["mensagem"]
         with app.test_client() as cliente:
             resposta = cliente.post("/prever", data={
                 "companhia": companhia, "mes": "1", "dia_semana": "1",
@@ -85,7 +115,8 @@ class TesteDados(unittest.TestCase):
             })
         self.assertEqual(resposta.status_code, 200)
         self.assertIn(mensagem, resposta.get_data(as_text=True))
-        self.assertNotIn("Atraso estimado:", resposta.get_data(as_text=True))
+        self.assertIn("Atraso estimado: " + estimativa, resposta.get_data(as_text=True))
+        self.assertGreaterEqual(MODELO["mae_minutos"], 0)
 
 
 if __name__ == "__main__":

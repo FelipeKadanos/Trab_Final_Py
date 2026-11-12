@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from flask import Flask, render_template, request
 
-from dados import criar_graficos, horario_para_minutos, ler_csv, limpar_dados, resumir_dados
+from dados import criar_graficos, ler_csv, limpar_dados, resumir_dados
 from modelo import prever_atraso, treinar_modelos
 
 
@@ -16,36 +16,42 @@ PASTA = os.path.dirname(os.path.abspath(__file__))
 ARQUIVO_TREINO = os.path.join(PASTA, "data", "voos_bts_2024_amostra.csv")
 
 
-# Le a amostra fixa, aplica a limpeza e treina os modelos ao iniciar a aplicacao.
-def carregar_modelo():
-    dados = pd.read_csv(ARQUIVO_TREINO)
-    dados_limpos, _ = limpar_dados(dados) # PERGUNTA: o que essa linha faz? por que tem , _?
-
-    return treinar_modelos(dados_limpos)
+# Le a amostra fixa, limpa os dados e treina uma vez ao iniciar a aplicacao.
+dados_treino = pd.read_csv(ARQUIVO_TREINO)
+dados_treino_limpos, _ = limpar_dados(dados_treino) # O diagnostico nao e usado no treino.
+MODELO = treinar_modelos(dados_treino_limpos)
 
 
-# Reutilizamos os modelos nas requisicoes; o upload nao altera o treinamento.
-MODELO = carregar_modelo()
-
-
-# Define a mensagem e a cor de acordo com a classe prevista.
+# Formata os minutos estimados em horas e minutos e escolhe a cor da mensagem.
 def preparar_resultado_atraso(previsao):
-    # A classe 1 indica chegada com atraso de pelo menos 15 minutos.
-    if previsao == 1:
-        return {"mensagem": "Com atraso de 15 minutos ou mais", "classe": "resultado-vermelho"}
+    minutos = max(0, round(previsao)) # Arredonda e apresenta chegadas antecipadas como zero atraso.
+    if minutos > 60:
+        classe = "resultado-vermelho"
+    elif minutos > 30:
+        classe = "resultado-laranja"
+    elif minutos > 15:
+        classe = "resultado-amarelo"
+    else:
+        classe = "resultado-verde"
 
-    return {"mensagem": "Sem atraso de 15 minutos ou mais", "classe": "resultado-verde"}
-
-
-# Envia os dados ao mesmo template, inclusive quando existe uma mensagem de erro.
-def dados_pagina(erro=None, resultado_previsao=None, analise=None): # PERGUNTA: Por que essa função existe não dava pra so renderizar o template direto?
-    return render_template("index.html", erro=erro, resultado_previsao=resultado_previsao, analise=analise, modelo=MODELO)
+    # divmod separa as horas completas dos minutos restantes.
+    horas, restantes = divmod(minutos, 60)
+    partes = []
+    if horas:
+        partes.append(f"{horas} hora" if horas == 1 else f"{horas} horas")
+    if restantes:
+        partes.append(f"{restantes} minuto" if restantes == 1 else f"{restantes} minutos")
+    return {
+        "mensagem": " e ".join(partes) or "Sem atraso estimado",
+        "total_minutos": f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos",
+        "classe": classe,
+    }
 
 
 # route associa um endereco do navegador a uma funcao do Python.
 @app.route("/")
 def inicio():
-    return dados_pagina()
+    return render_template("index.html", modelo=MODELO)
 
 
 # POST recebe o arquivo enviado pelo formulario de upload.
@@ -64,13 +70,13 @@ def analisar():
             "graficos": criar_graficos(dados_limpos),
         }
 
-        return dados_pagina(analise=analise)
+        return render_template("index.html", modelo=MODELO, analise=analise)
 
     except ValueError as erro:
-        return dados_pagina(erro=str(erro))
+        return render_template("index.html", modelo=MODELO, erro=str(erro))
 
 
-# Recebe as entradas, valida os valores e chama o classificador escolhido.
+# Valida as entradas e consulta a classificacao e a estimativa de minutos.
 @app.route("/prever", methods=["POST"])
 def prever():
 
@@ -86,7 +92,14 @@ def prever():
             raise ValueError("Preencha todos os campos da previsao com valores validos.")
 
 
-        horario = horario_para_minutos(request.form.get("horario"))
+        # Aceita HHMM, 13h30 e 13:30; converte para minutos desde a meia-noite.
+        try:
+            texto_horario = request.form.get("horario", "").strip().lower().replace("h", "").replace(":", "")
+            horario_hhmm = int(float(texto_horario))
+            horas, minutos = divmod(horario_hhmm, 100)
+            horario = horas * 60 + minutos if 0 <= horas <= 23 and 0 <= minutos <= 59 else None
+        except (TypeError, ValueError, OverflowError):
+            horario = None
 
         # Validamos tambem no servidor, pois o navegador pode enviar dados alterados.
         if companhia not in MODELO["companhias"]:
@@ -102,18 +115,20 @@ def prever():
             raise ValueError("A distancia precisa ser maior que zero.")
 
         previsao = prever_atraso(MODELO["modelo"], companhia, mes, dia_semana, horario, distancia)
-        resultado = preparar_resultado_atraso(previsao)
+        minutos = prever_atraso(MODELO["modelo_minutos"], companhia, mes, dia_semana, horario, distancia)
+        resultado = preparar_resultado_atraso(minutos)
+        resultado["classificacao"] = "Com atraso de 15 minutos ou mais" if previsao == 1 else "Sem atraso de 15 minutos ou mais"
         
-        return dados_pagina(resultado_previsao=resultado)
+        return render_template("index.html", modelo=MODELO, resultado_previsao=resultado)
 
     except ValueError as erro:
-        return dados_pagina(erro=str(erro))
+        return render_template("index.html", modelo=MODELO, erro=str(erro))
 
 
 # O Flask retorna 413 quando o envio ultrapassa o limite configurado.
 @app.errorhandler(413)
 def arquivo_muito_grande(_erro):
-    return dados_pagina(erro="O arquivo ultrapassa o limite de 16 MB."), 413
+    return render_template("index.html", modelo=MODELO, erro="O arquivo ultrapassa o limite de 16 MB."), 413
 
 
 # Inicia o servidor somente quando este arquivo e executado diretamente.
