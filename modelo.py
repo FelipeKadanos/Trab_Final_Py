@@ -2,8 +2,7 @@
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, mean_absolute_error, precision_score, recall_score
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -16,8 +15,10 @@ COLUNAS_X = ["Reporting_Airline", "Month", "DayofWeek", "HorarioMinutos", "Dista
 
 # Junta o tratamento das colunas ao algoritmo que aprendera com os dados.
 def _preparar_modelo(estimador, escalar_numeros=False):
+
     # Cada modelo recebe seu proprio preparo, ajustado apenas com o treino.
     preparo_numerico = StandardScaler() if escalar_numeros else "passthrough"
+    
     # OneHotEncoder(): transforma companhias em colunas numericas.
     # handle_unknown="ignore": aceita uma categoria que nao apareceu no treino.
     # COLUNAS_X[1:]: seleciona todas as entradas numericas, depois da companhia.
@@ -25,6 +26,7 @@ def _preparar_modelo(estimador, escalar_numeros=False):
         ("categorias", OneHotEncoder(handle_unknown="ignore"), [COLUNAS_X[0]]),
         ("numeros", preparo_numerico, COLUNAS_X[1:]),
     ])
+    
     # Pipeline(): aplica o mesmo preparo no fit() e no predict(), evitando vazamento.
     return Pipeline([
         ("preparo", preparo),
@@ -34,8 +36,10 @@ def _preparar_modelo(estimador, escalar_numeros=False):
 
 # Treina um classificador e compara suas respostas com os valores reais do teste.
 def _avaliar(nome, pipeline, X_treino, X_teste, y_treino, y_teste):
+
     pipeline.fit(X_treino, y_treino)
     previsoes = pipeline.predict(X_teste)
+    
     # Precisao: acertos entre os atrasos previstos. Recall: atrasos reais identificados.
     # F1 combina precisao e recall; zero_division=0 evita divisao por zero.
     # Na matriz, a ordem e 0 (sem atraso) e 1 (com atraso), nas linhas e colunas.
@@ -55,6 +59,7 @@ def treinar_modelos(dados):
     # X contem informacoes anteriores ao voo; y contem a resposta conhecida.
     X = dados[COLUNAS_X]
     y = dados["Atrasado"]
+    
     if y.nunique() < 2:
         raise ValueError("A base de treino precisa possuir voos com e sem atraso.")
 
@@ -69,6 +74,7 @@ def treinar_modelos(dados):
     arvore = _preparar_modelo(
         DecisionTreeClassifier(max_depth=6, class_weight="balanced", random_state=42)
     )
+
     # A regressao logistica recebe numeros padronizados pelo StandardScaler.
     logistica = _preparar_modelo(
         LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42),
@@ -79,26 +85,13 @@ def treinar_modelos(dados):
         _avaliar("Arvore de Decisao", arvore, X_treino, X_teste, y_treino, y_teste),
         _avaliar("Regressao Logistica", logistica, X_treino, X_teste, y_treino, y_teste),
     ]
+
     # Em caso de empate, a arvore aparece primeiro e permanece escolhida.
     escolhido = max(resultados, key=lambda resultado: resultado["f1"])
 
-    # Este modelo adicional estima quantos minutos o voo pode atrasar.
-    # A classificacao continua sendo comparada acima, conforme o tema do trabalho.
-    # loc seleciona os mesmos registros da divisao anterior, agora com o atraso em minutos.
-    y_minutos_treino = dados.loc[X_treino.index, "ArrDelay"]
-    y_minutos_teste = dados.loc[X_teste.index, "ArrDelay"]
-    # A floresta combina 100 arvores. n_jobs=-1 utiliza os processadores disponiveis.
-    modelo_minutos = _preparar_modelo(
-        RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, random_state=42, n_jobs=-1)
-    )
-    modelo_minutos.fit(X_treino, y_minutos_treino)
-    minutos_previstos = modelo_minutos.predict(X_teste)
-
-    # Guardamos os modelos e os resultados usados na pagina. MAE e o erro medio em minutos.
+    # Guardamos o classificador escolhido e os resultados usados na pagina.
     return {
         "modelo": escolhido["modelo"],
-        "modelo_minutos": modelo_minutos,
-        "mae_minutos": mean_absolute_error(y_minutos_teste, minutos_previstos),
         "nome_escolhido": escolhido["nome"],
         "resultados": resultados,
         "tamanho_treino": len(X_treino),
@@ -108,9 +101,11 @@ def treinar_modelos(dados):
     }
 
 
-# Monta uma linha com os campos do formulario e retorna a estimativa em minutos.
+# Monta uma linha com os campos do formulario e retorna a classe: 0 ou 1.
 def prever_atraso(modelo, companhia, mes, dia_semana, horario_minutos, distancia):
+
     entrada = pd.DataFrame(
         [[companhia, mes, dia_semana, horario_minutos, distancia]], columns=COLUNAS_X
     )
-    return float(modelo.predict(entrada)[0])
+
+    return int(modelo.predict(entrada)[0])

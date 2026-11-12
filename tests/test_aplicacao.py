@@ -4,7 +4,8 @@ import unittest
 import pandas as pd
 from werkzeug.datastructures import FileStorage
 
-from app import preparar_resultado_atraso
+from app import MODELO, app, preparar_resultado_atraso
+from modelo import prever_atraso
 from dados import horario_para_minutos, ler_csv, limpar_dados
 
 
@@ -65,24 +66,26 @@ class TesteDados(unittest.TestCase):
         self.assertEqual(horario_para_minutos("13:30"), 810)
         self.assertIsNone(horario_para_minutos(2460))
 
-    def test_cores_do_atraso_estimado(self):
-        # Conferimos os limites para evitar trocar a cor no minuto errado.
-        self.assertEqual(preparar_resultado_atraso(15)["classe"], "resultado-verde")
-        self.assertEqual(preparar_resultado_atraso(16)["classe"], "resultado-amarelo")
-        self.assertEqual(preparar_resultado_atraso(30)["classe"], "resultado-amarelo")
-        self.assertEqual(preparar_resultado_atraso(31)["classe"], "resultado-laranja")
-        self.assertEqual(preparar_resultado_atraso(60)["classe"], "resultado-laranja")
-        self.assertEqual(preparar_resultado_atraso(61)["classe"], "resultado-vermelho")
+    def test_resultado_classificacao(self):
+        self.assertEqual(preparar_resultado_atraso(0), {
+            "mensagem": "Sem atraso de 15 minutos ou mais", "classe": "resultado-verde",
+        })
+        self.assertEqual(preparar_resultado_atraso(1), {
+            "mensagem": "Com atraso de 15 minutos ou mais", "classe": "resultado-vermelho",
+        })
 
-    def test_formata_atraso_em_horas_e_minutos(self):
-        # Cobre horas exatas, minutos restantes, zero e singular/plural.
-        resultado = preparar_resultado_atraso(90)
-        self.assertEqual(resultado["mensagem"], "1 hora e 30 minutos")
-        self.assertEqual(resultado["total_minutos"], "90 minutos")
-        self.assertEqual(preparar_resultado_atraso(60)["mensagem"], "1 hora")
-        self.assertEqual(preparar_resultado_atraso(121)["mensagem"], "2 horas e 1 minuto")
-        self.assertEqual(preparar_resultado_atraso(0)["mensagem"], "Sem atraso estimado")
-        self.assertEqual(preparar_resultado_atraso(1)["mensagem"], "1 minuto")
+    def test_formulario_usa_classificador_escolhido(self):
+        companhia = MODELO["companhias"][0]
+        previsao = prever_atraso(MODELO["modelo"], companhia, 1, 1, 810, 500)
+        mensagem = preparar_resultado_atraso(previsao)["mensagem"]
+        with app.test_client() as cliente:
+            resposta = cliente.post("/prever", data={
+                "companhia": companhia, "mes": "1", "dia_semana": "1",
+                "horario": "13h30", "distancia": "500",
+            })
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn(mensagem, resposta.get_data(as_text=True))
+        self.assertNotIn("Atraso estimado:", resposta.get_data(as_text=True))
 
 
 if __name__ == "__main__":

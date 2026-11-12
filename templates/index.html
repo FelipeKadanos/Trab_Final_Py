@@ -74,8 +74,7 @@
             <!-- A classe de cor e o texto ja foram calculados no servidor. -->
             {% if resultado_previsao %}
             <div class="mensagem {{ resultado_previsao.classe }}">
-                <strong>Atraso estimado: {{ resultado_previsao.mensagem }}.</strong>
-                <span class="total-minutos">{{ resultado_previsao.total_minutos }}</span>
+                <strong>Previsao: {{ resultado_previsao.mensagem }}.</strong>
                 <span class="aviso-estimativa">Esta e uma estimativa do modelo. O atraso real so pode ser confirmado depois da chegada.</span>
             </div>
             {% endif %}
@@ -99,7 +98,6 @@
                 {% endfor %}
             </div>
             <p><strong>Modelo escolhido: {{ modelo.nome_escolhido }}</strong>, por apresentar o maior F1 para voos atrasados.</p>
-            <p>O tempo de atraso e estimado por um modelo auxiliar, com erro medio de {{ '%.1f'|format(modelo.mae_minutos) }} minutos no conjunto de teste.</p>
         </section>
 
         <!-- Os resultados da analise aparecem somente depois de um upload valido. -->
