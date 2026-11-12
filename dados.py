@@ -3,6 +3,7 @@ import csv
 import io
 import os
 import tempfile
+import unicodedata
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "matplotlib-cache"))
 import matplotlib
@@ -15,6 +16,24 @@ COLUNAS_OBRIGATORIAS = [
     "Year", "Month", "DayofWeek", "Reporting_Airline", "CRSDepTime",
     "Distance", "Cancelled", "Diverted", "ArrDelay",
 ]
+
+NOMES_COLUNAS = {
+    "year": "Year", "ano": "Year",
+    "month": "Month", "mes": "Month",
+    "dayofweek": "DayofWeek", "diadasemana": "DayofWeek",
+    "reportingairline": "Reporting_Airline", "companhia": "Reporting_Airline", "companhiaaerea": "Reporting_Airline",
+    "crsdeptime": "CRSDepTime", "horarioprevisto": "CRSDepTime", "horariopartida": "CRSDepTime",
+    "distance": "Distance", "distancia": "Distance",
+    "cancelled": "Cancelled", "cancelado": "Cancelled",
+    "diverted": "Diverted", "desviado": "Diverted",
+    "arrdelay": "ArrDelay", "atraso": "ArrDelay", "atrasochegada": "ArrDelay",
+}
+
+
+def _normalizar_nome_coluna(nome):
+    texto = unicodedata.normalize("NFKD", str(nome)).encode("ascii", "ignore").decode("ascii")
+    texto = "".join(caractere for caractere in texto.lower() if caractere.isalnum())
+    return NOMES_COLUNAS.get(texto, str(nome).strip())
 
 
 # Le o arquivo enviado e verifica o formato antes de iniciar a analise.
@@ -32,18 +51,35 @@ def ler_csv(arquivo):
     try:
         texto = conteudo.decode("utf-8-sig")
     except UnicodeDecodeError:
-        raise ValueError("O arquivo precisa estar no formato UTF-8.")
+        # Alguns arquivos salvos pelo Excel no Windows utilizam esta codificacao.
+        texto = conteudo.decode("latin-1")
 
     try:
-        amostra = texto[:4096]
-        separador = csv.Sniffer().sniff(amostra, delimiters=",;").delimiter
-        dados = pd.read_csv(io.StringIO(texto), sep=separador)
-    except (csv.Error, pd.errors.ParserError, pd.errors.EmptyDataError):
-        raise ValueError("Nao foi possivel ler o CSV. Use virgula ou ponto e virgula como separador.")
+        linhas = texto.splitlines()
+        if linhas and linhas[0].strip().lower() in ["sep=,", "sep=;", "sep=\\t"]:
+            texto = "\n".join(linhas[1:])
+
+        # Testamos os separadores aceitos e usamos aquele que encontrou mais colunas.
+        tentativas = []
+        for separador in [",", ";", "\t"]:
+            try:
+                tentativas.append(pd.read_csv(io.StringIO(texto), sep=separador))
+            except (pd.errors.ParserError, pd.errors.EmptyDataError):
+                pass
+        if not tentativas:
+            raise ValueError
+        dados = max(tentativas, key=lambda tentativa: len(tentativa.columns))
+        dados = dados.rename(columns={coluna: _normalizar_nome_coluna(coluna) for coluna in dados.columns})
+    except ValueError:
+        raise ValueError("Nao foi possivel ler o CSV. Use virgula, ponto e virgula ou tabulacao como separador.")
 
     colunas_ausentes = [coluna for coluna in COLUNAS_OBRIGATORIAS if coluna not in dados.columns]
     if colunas_ausentes:
-        raise ValueError("Colunas obrigatorias ausentes: " + ", ".join(colunas_ausentes))
+        encontradas = ", ".join(str(coluna) for coluna in dados.columns)
+        raise ValueError(
+            "Colunas obrigatorias ausentes: " + ", ".join(colunas_ausentes)
+            + ". Colunas encontradas no arquivo: " + encontradas
+        )
 
     return dados
 

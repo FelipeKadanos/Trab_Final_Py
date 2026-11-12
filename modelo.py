@@ -1,7 +1,8 @@
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, mean_absolute_error, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -62,8 +63,21 @@ def treinar_modelos(dados):
     # Em caso de empate, a arvore aparece primeiro e permanece escolhida.
     escolhido = max(resultados, key=lambda resultado: resultado["f1"])
 
+    # Este modelo adicional estima quantos minutos o voo pode atrasar.
+    # A classificacao continua sendo comparada acima, conforme o tema do trabalho.
+    y_minutos_treino = dados.loc[X_treino.index, "ArrDelay"]
+    y_minutos_teste = dados.loc[X_teste.index, "ArrDelay"]
+    modelo_minutos = Pipeline([
+        ("preparo", _criar_preparo()),
+        ("modelo", RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=5, random_state=42, n_jobs=-1)),
+    ])
+    modelo_minutos.fit(X_treino, y_minutos_treino)
+    minutos_previstos = modelo_minutos.predict(X_teste)
+
     return {
         "modelo": escolhido["modelo"],
+        "modelo_minutos": modelo_minutos,
+        "mae_minutos": mean_absolute_error(y_minutos_teste, minutos_previstos),
         "nome_escolhido": escolhido["nome"],
         "resultados": resultados,
         "tamanho_treino": len(X_treino),
@@ -81,4 +95,4 @@ def prever_atraso(modelo, companhia, mes, dia_semana, horario_minutos, distancia
         "HorarioMinutos": horario_minutos,
         "Distance": distancia,
     }])
-    return int(modelo.predict(entrada)[0])
+    return float(modelo.predict(entrada)[0])

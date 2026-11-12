@@ -23,6 +23,42 @@ def carregar_modelo():
 MODELO = carregar_modelo()
 
 
+# Define o texto e a cor de acordo com os minutos estimados de atraso.
+def preparar_resultado_atraso(previsao):
+    minutos = max(0, round(previsao))
+
+    if minutos > 60:
+        classe = "resultado-vermelho"
+    elif minutos > 30:
+        classe = "resultado-laranja"
+    elif minutos > 15:
+        classe = "resultado-amarelo"
+    else:
+        classe = "resultado-verde"
+
+    horas = minutos // 60
+    minutos_restantes = minutos % 60
+
+    if minutos == 0:
+        mensagem = "Sem atraso estimado"
+    elif horas == 0:
+        mensagem = f"{minutos_restantes} minuto" if minutos_restantes == 1 else f"{minutos_restantes} minutos"
+    else:
+        texto_horas = f"{horas} hora" if horas == 1 else f"{horas} horas"
+        if minutos_restantes == 0:
+            mensagem = texto_horas
+        else:
+            texto_minutos = f"{minutos_restantes} minuto" if minutos_restantes == 1 else f"{minutos_restantes} minutos"
+            mensagem = texto_horas + " e " + texto_minutos
+
+    return {
+        "mensagem": mensagem,
+        "classe": classe,
+        "minutos": minutos,
+        "total_minutos": f"{minutos} minuto" if minutos == 1 else f"{minutos} minutos",
+    }
+
+
 def dados_pagina(erro=None, resultado_previsao=None, analise=None):
     return {
         "erro": erro,
@@ -74,9 +110,9 @@ def prever():
         if distancia <= 0:
             raise ValueError("A distancia precisa ser maior que zero.")
 
-        previsao = prever_atraso(MODELO["modelo"], companhia, mes, dia_semana, horario, distancia)
-        mensagem = "O voo provavelmente chegara com 15 minutos ou mais de atraso." if previsao == 1 else "O voo provavelmente chegara com menos de 15 minutos de atraso."
-        return render_template("index.html", **dados_pagina(resultado_previsao=mensagem))
+        previsao = prever_atraso(MODELO["modelo_minutos"], companhia, mes, dia_semana, horario, distancia)
+        resultado = preparar_resultado_atraso(previsao)
+        return render_template("index.html", **dados_pagina(resultado_previsao=resultado))
     except ValueError as erro:
         return render_template("index.html", **dados_pagina(erro=str(erro)))
 

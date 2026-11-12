@@ -4,6 +4,7 @@ import unittest
 import pandas as pd
 from werkzeug.datastructures import FileStorage
 
+from app import preparar_resultado_atraso
 from dados import horario_para_minutos, ler_csv, limpar_dados
 
 
@@ -26,6 +27,18 @@ class TesteDados(unittest.TestCase):
     def test_le_csv_com_ponto_e_virgula(self):
         dados = ler_csv(self.criar_arquivo(CSV_VALIDO.replace(",", ";")))
         self.assertEqual(len(dados), 4)
+
+    def test_le_csv_com_tabulacao(self):
+        dados = ler_csv(self.criar_arquivo(CSV_VALIDO.replace(",", "\t")))
+        self.assertEqual(len(dados), 4)
+
+    def test_aceita_nomes_oficiais_e_em_portugues(self):
+        cabecalho = "Ano,Mes,Dia da semana,Companhia,Horario previsto,Distancia,Cancelado,Desviado,Atraso chegada"
+        dados = ler_csv(self.criar_arquivo(CSV_VALIDO.replace(CSV_VALIDO.splitlines()[0], cabecalho)))
+        self.assertEqual(list(dados.columns), [
+            "Year", "Month", "DayofWeek", "Reporting_Airline", "CRSDepTime",
+            "Distance", "Cancelled", "Diverted", "ArrDelay",
+        ])
 
     def test_rejeita_coluna_ausente(self):
         with self.assertRaisesRegex(ValueError, "Colunas obrigatorias"):
@@ -50,6 +63,19 @@ class TesteDados(unittest.TestCase):
         self.assertEqual(horario_para_minutos("13h30"), 810)
         self.assertEqual(horario_para_minutos("13:30"), 810)
         self.assertIsNone(horario_para_minutos(2460))
+
+    def test_cores_do_atraso_estimado(self):
+        self.assertEqual(preparar_resultado_atraso(15)["classe"], "resultado-verde")
+        self.assertEqual(preparar_resultado_atraso(16)["classe"], "resultado-amarelo")
+        self.assertEqual(preparar_resultado_atraso(31)["classe"], "resultado-laranja")
+        self.assertEqual(preparar_resultado_atraso(61)["classe"], "resultado-vermelho")
+
+    def test_formata_atraso_em_horas_e_minutos(self):
+        resultado = preparar_resultado_atraso(90)
+        self.assertEqual(resultado["mensagem"], "1 hora e 30 minutos")
+        self.assertEqual(resultado["total_minutos"], "90 minutos")
+        self.assertEqual(preparar_resultado_atraso(60)["mensagem"], "1 hora")
+        self.assertEqual(preparar_resultado_atraso(121)["mensagem"], "2 horas e 1 minuto")
 
 
 if __name__ == "__main__":

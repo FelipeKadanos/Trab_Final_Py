@@ -81,6 +81,8 @@ O alvo `y` e `Atrasado`. As entradas `X` sao companhia, mes, dia da semana, hora
 
 Foram comparados uma Arvore de Decisao e uma Regressao Logistica. Ambos usam a mesma divisao estratificada de 80% para treino e 20% para teste, com `random_state=42`. A companhia e codificada com `OneHotEncoder`; a Regressao Logistica tambem recebe as variaveis numericas padronizadas. Todo o preparo e ajustado apenas no treino por meio de `Pipeline`.
 
+O formulario tambem usa uma Floresta Aleatoria auxiliar para estimar os minutos de atraso. O resultado fica verde ate 15 minutos, amarelo acima de 15, laranja acima de 30 e vermelho acima de 60 minutos. Como a previsao e feita antes do voo, esse valor e uma estimativa; o atraso real so e conhecido depois da chegada.
+
 Na amostra incluida, depois da limpeza restaram 9.813 voos:
 
 | Modelo | Acuracia | Precisao | Recall | F1 |

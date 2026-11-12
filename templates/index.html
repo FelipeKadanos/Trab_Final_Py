@@ -17,7 +17,7 @@
 
         <section>
             <h2>Analisar um arquivo CSV</h2>
-            <p>Envie um CSV separado por virgula ou ponto e virgula, com as colunas descritas no README.</p>
+            <p>Envie um CSV separado por virgula, ponto e virgula ou tabulacao, com as colunas descritas no README.</p>
             <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data">
                 <input type="file" name="arquivo" accept=".csv" required>
                 <button type="submit">Analisar arquivo</button>
@@ -68,7 +68,13 @@
                 <label>Distancia em milhas<input type="number" name="distancia" min="1" step="0.1" required></label>
                 <button type="submit">Realizar previsao</button>
             </form>
-            {% if resultado_previsao %}<div class="mensagem sucesso">{{ resultado_previsao }}</div>{% endif %}
+            {% if resultado_previsao %}
+            <div class="mensagem {{ resultado_previsao.classe }}">
+                <strong>Atraso estimado: {{ resultado_previsao.mensagem }}.</strong>
+                <span class="total-minutos">{{ resultado_previsao.total_minutos }}</span>
+                <span class="aviso-estimativa">Esta e uma estimativa do modelo. O atraso real so pode ser confirmado depois da chegada.</span>
+            </div>
+            {% endif %}
         </section>
 
         <section>
@@ -88,6 +94,7 @@
                 {% endfor %}
             </div>
             <p><strong>Modelo escolhido: {{ modelo.nome_escolhido }}</strong>, por apresentar o maior F1 para voos atrasados.</p>
+            <p>O tempo de atraso e estimado por um modelo auxiliar, com erro medio de {{ '%.1f'|format(modelo.mae_minutos) }} minutos no conjunto de teste.</p>
         </section>
 
         {% if analise %}
