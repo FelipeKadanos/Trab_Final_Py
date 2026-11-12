@@ -1,103 +1,155 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="utf-8">
-    <title>Atrasos de voos — Início</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analise de atrasos em voos</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<nav><a href="{{ url_for('inicio') }}">Início</a></nav>
-<h1>Atrasos de voos: análise e previsão</h1>
-<p>Pergunta do projeto: usando informações disponíveis antes da partida, é possível prever se um voo
-chegará com atraso de pelo menos 15 minutos?</p>
+    <header>
+        <h1>Analise de atrasos em voos</h1>
+        <p>Previsao de chegada com atraso de 15 minutos ou mais</p>
+    </header>
 
-{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
-{% if aviso_artefatos %}<p class="aviso">{{ aviso_artefatos }}</p>{% endif %}
+    <!-- Jinja recebe os dados do Flask e monta as partes condicionais da pagina. -->
+    <main>
+        {% if erro %}<div class="mensagem erro">{{ erro }}</div>{% endif %}
 
-<section class="caixa">
-    <h2>Modelo em uso</h2>
-    {% if avaliacao %}
-    <ul>
-        <li>Fonte: {{ avaliacao.fonte }}</li>
-        <li>Período: {{ avaliacao.periodo }}</li>
-        <li>Registros usados no treino: {{ avaliacao.quantidade_registros }}</li>
-        <li>Versão da base (SHA-256 do CSV de treino): <code>{{ avaliacao.versao_base }}</code></li>
-        <li>Modelo escolhido: {{ avaliacao.modelo_escolhido }}</li>
-    </ul>
-    {% else %}
-    <p>Informações de treino indisponíveis.</p>
-    {% endif %}
-    <p><strong>Importante:</strong> o upload de CSV atualiza apenas as análises e os gráficos.
-    O modelo <strong>não é retreinado</strong> com o arquivo enviado.</p>
-</section>
+        <section>
+            <h2>Analisar um arquivo CSV</h2>
+            <p>Envie um CSV UTF-8 separado por virgula ou ponto e virgula, com os nomes oficiais das colunas descritos no README.</p>
+            <!-- multipart/form-data permite enviar o conteudo do arquivo ao Flask. -->
+            <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data">
+                <input type="file" name="arquivo" accept=".csv" required>
+                <button type="submit">Analisar arquivo</button>
+            </form>
+        </section>
 
-<section>
-    <h2>1. Enviar CSV para análise</h2>
-    <p>Formato: CSV UTF-8, separador vírgula, decimal com ponto, com cabeçalho. Tamanho máximo: 10 MB.
-    Colunas extras são ignoradas.</p>
-    <div class="rolagem">
-    <table>
-        <tr><th>Coluna</th><th>Descrição</th></tr>
-        <tr><td>companhia</td><td>Código da companhia aérea (texto, ex.: AA)</td></tr>
-        <tr><td>mes</td><td>Mês, inteiro de 1 a 12</td></tr>
-        <tr><td>dia_semana</td><td>1 (segunda) a 7 (domingo)</td></tr>
-        <tr><td>hora_prevista</td><td>Horário previsto de partida, HHMM local (0000–2359)</td></tr>
-        <tr><td>distancia</td><td>Distância em milhas (positiva)</td></tr>
-        <tr><td>atraso_chegada</td><td>Atraso de chegada em minutos (negativo = chegada antecipada)</td></tr>
-        <tr><td>cancelado</td><td>0 ou 1</td></tr>
-        <tr><td>desviado</td><td>0 ou 1</td></tr>
-    </table>
-    </div>
-    <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data">
-        <label>Arquivo CSV:
-            <input type="file" name="arquivo" accept=".csv" required>
-        </label>
-        <button type="submit">Analisar</button>
-    </form>
-</section>
-
-<section>
-    <h2>2. Prever um voo</h2>
-    <p>Informe os dados conhecidos antes da partida. Ninguém informa o atraso futuro.</p>
-    {% if not modelo_disponivel %}
-    <p class="aviso">Previsão indisponível até o modelo ser treinado.</p>
-    {% endif %}
-    {% if erro_previsao %}<p class="erro">{{ erro_previsao }}</p>{% endif %}
-    <form action="{{ url_for('prever') }}" method="post">
-        <label>Companhia aérea:
-            {% if companhias %}
-            <select name="companhia" required>
-                {% for c in companhias %}
-                <option value="{{ c }}" {% if valores.companhia == c %}selected{% endif %}>{{ c }}</option>
-                {% endfor %}
-            </select>
-            {% else %}
-            <input type="text" name="companhia" value="{{ valores.companhia or '' }}" placeholder="ex.: AA" required>
+        <section>
+            <h2>Prever atraso</h2>
+            <p>O modelo foi treinado com a amostra fixa do BTS de janeiro a marco de 2024.</p>
+            <!-- As opcoes mostram nomes, mas enviam os valores numericos usados no modelo. -->
+            <form action="{{ url_for('prever') }}" method="post" class="formulario-previsao">
+                <label>Companhia
+                    <select name="companhia" required>
+                        {% for companhia in modelo.companhias %}<option value="{{ companhia }}">{{ companhia }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label>Mês
+                    <select name="mes" required>
+                        <option value="" selected disabled>Selecione o mês</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </label>
+                <label>Dia da semana
+                    <select name="dia_semana" required>
+                        <option value="" selected disabled>Selecione o dia</option>
+                        <option value="1">Segunda-feira</option>
+                        <option value="2">Terça-feira</option>
+                        <option value="3">Quarta-feira</option>
+                        <option value="4">Quinta-feira</option>
+                        <option value="5">Sexta-feira</option>
+                        <option value="6">Sábado</option>
+                        <option value="7">Domingo</option>
+                    </select>
+                </label>
+                <label>Horário previsto
+                    <input type="text" name="horario" id="horario" inputmode="numeric" maxlength="5" placeholder="13h30" pattern="([01][0-9]|2[0-3])h[0-5][0-9]" title="Informe um horário válido no formato 13h30" required>
+                </label>
+                <label>Distancia em milhas<input type="number" name="distancia" min="1" step="0.1" required></label>
+                <button type="submit">Realizar previsao</button>
+            </form>
+            <!-- A classe de cor e o texto ja foram calculados no servidor. -->
+            {% if resultado_previsao %}
+            <div class="mensagem {{ resultado_previsao.classe }}">
+                <strong>Atraso estimado: {{ resultado_previsao.mensagem }}.</strong>
+                <span class="total-minutos">{{ resultado_previsao.total_minutos }}</span>
+                <span class="aviso-estimativa">Classificacao: {{ resultado_previsao.classificacao }}.</span>
+                <span class="aviso-estimativa">Esta e uma estimativa do modelo. O atraso real so pode ser confirmado depois da chegada.</span>
+            </div>
             {% endif %}
-        </label>
-        <label>Mês (1 a 12):
-            <input type="number" name="mes" min="1" max="12" value="{{ valores.mes or '' }}" required>
-        </label>
-        <label>Dia da semana:
-            <select name="dia_semana" required>
-                {% for numero, nome in [(1,'Segunda'),(2,'Terça'),(3,'Quarta'),(4,'Quinta'),(5,'Sexta'),(6,'Sábado'),(7,'Domingo')] %}
-                <option value="{{ numero }}" {% if valores.dia_semana == numero|string %}selected{% endif %}>{{ numero }} — {{ nome }}</option>
+        </section>
+
+        <section>
+            <h2>Comparacao dos modelos</h2>
+            <p>Treino: {{ modelo.tamanho_treino }} voos | Teste: {{ modelo.tamanho_teste }} voos | Classe majoritaria no teste: {{ '%.1f'|format(modelo.classe_majoritaria * 100) }}%</p>
+            <div class="modelos">
+                <!-- Repete o mesmo cartao para cada classificador avaliado. -->
+                {% for item in modelo.resultados %}
+                <article>
+                    <h3>{{ item.nome }}</h3>
+                    <p>Acuracia: {{ '%.3f'|format(item.acuracia) }}</p>
+                    <p>Precisao: {{ '%.3f'|format(item.precisao) }}</p>
+                    <p>Recall: {{ '%.3f'|format(item.recall) }}</p>
+                    <p>F1: {{ '%.3f'|format(item.f1) }}</p>
+                    <p>Matriz de confusao (real nas linhas e previsto nas colunas):</p>
+                    <table><tr><td>{{ item.matriz[0][0] }}</td><td>{{ item.matriz[0][1] }}</td></tr><tr><td>{{ item.matriz[1][0] }}</td><td>{{ item.matriz[1][1] }}</td></tr></table>
+                </article>
                 {% endfor %}
-            </select>
-        </label>
-        <label>Horário previsto de partida (HHMM, ex.: 1415 = 14h15):
-            <input type="number" name="hora_prevista" min="0" max="2359" value="{{ valores.hora_prevista or '' }}" required>
-        </label>
-        <label>Distância (milhas):
-            <input type="number" name="distancia" min="1" step="any" value="{{ valores.distancia or '' }}" required>
-        </label>
-        <button type="submit" {% if not modelo_disponivel %}disabled{% endif %}>Prever</button>
-    </form>
-    {% if aviso_companhia %}<p class="aviso">{{ aviso_companhia }}</p>{% endif %}
-    {% if resultado %}
-    <p class="resultado">Estimativa: <strong>{{ resultado }}</strong>.<br>
-    <small>Estimativa didática baseada em um único mês de dados; não é garantia de resultado.</small></p>
-    {% endif %}
-</section>
+            </div>
+            <p>Estimativa de tempo: Floresta Aleatoria, com erro absoluto medio (MAE) de {{ '%.1f'|format(modelo.mae_minutos) }} minutos no teste, considerando atraso minimo de zero.</p>
+            <p><strong>Modelo escolhido: {{ modelo.nome_escolhido }}</strong>, por apresentar o maior F1 para voos atrasados.</p>
+        </section>
+
+        <!-- Os resultados da analise aparecem somente depois de um upload valido. -->
+        {% if analise %}
+        <section>
+            <h2>Resultado da analise</h2>
+            <div class="resumo">
+                <span>{{ analise.resumo.voos }} voos validos</span>
+                <span>{{ analise.resumo.companhias }} companhias</span>
+                <span>{{ '%.1f'|format(analise.resumo.percentual_atrasados) }}% atrasados</span>
+                <span>{{ '%.1f'|format(analise.resumo.distancia_media) }} milhas em media</span>
+            </div>
+            <h3>Limpeza</h3>
+            <p>Registros antes: {{ analise.diagnostico.quantidade_inicial }} | depois: {{ analise.diagnostico.quantidade_final }} | removidos: {{ analise.diagnostico.removidos }} | duplicatas completas encontradas: {{ analise.diagnostico.duplicatas }}</p>
+            <p>Valores ausentes antes da limpeza: {{ analise.diagnostico.ausentes if analise.diagnostico.ausentes else 'nenhum' }}</p>
+            <details>
+                <summary>Tipos encontrados no arquivo original</summary>
+                <ul>{% for coluna, tipo in analise.diagnostico.tipos.items() %}<li>{{ coluna }}: {{ tipo }}</li>{% endfor %}</ul>
+            </details>
+            <h3>Amostra dos dados tratados</h3>
+            {# safe renderiza a tabela criada pelo Pandas, que escapa os valores das celulas. #}
+            <div class="tabela-container">{{ analise.amostra|safe }}</div>
+            <h3>Graficos e interpretacoes</h3>
+            {% for grafico in analise.graficos %}
+            <article class="grafico">
+                <!-- A imagem Base64 vem na resposta, sem precisar de um arquivo PNG separado. -->
+                <img src="data:image/png;base64,{{ grafico.imagem }}" alt="Grafico da analise">
+                <p>{{ grafico.interpretacao }}</p>
+            </article>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </main>
+    <script>
+        // getElementById encontra o campo que recebera a mascara de horario.
+        const campoHorario = document.getElementById("horario");
+
+        // Mantem apenas quatro numeros e adiciona o h enquanto o usuario digita.
+        campoHorario.addEventListener("input", function () {
+            // \D representa qualquer caractere que nao seja um numero.
+            // slice(0, 4) limita a entrada aos dois digitos da hora e dois do minuto.
+            const numeros = campoHorario.value.replace(/\D/g, "").slice(0, 4);
+
+            if (numeros.length > 2) {
+                campoHorario.value = numeros.slice(0, 2) + "h" + numeros.slice(2);
+            } else {
+                campoHorario.value = numeros;
+            }
+        });
+    </script>
 </body>
 </html>
